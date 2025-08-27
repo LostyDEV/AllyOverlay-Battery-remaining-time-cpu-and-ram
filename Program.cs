@@ -119,9 +119,9 @@ namespace OverlayApp
         {
             this.FormBorderStyle = FormBorderStyle.None;
             this.ShowInTaskbar = false;
-            this.TopMost = true; // Tämä ominaisuus pakottaa ikkunan pysymään aina päällä
+            this.TopMost = true; // This forces the window to stay on top
             this.WindowState = FormWindowState.Normal;
-            this.Size = new Size(400, 150); // Adjusted size to fit larger font
+            this.Size = new Size(350, 80); // Adjusted size to be more compact
             this.Top = 20;
             this.Left = 20;
 
@@ -140,8 +140,8 @@ namespace OverlayApp
             RegisterHotKey(this.Handle, HOTKEY_ID, MOD_SHIFT, VK_L);
             this.FormClosing += (s, e) => UnregisterHotKey(this.Handle, HOTKEY_ID);
 
-            // Enable dragging the form
-            this.MouseDown += (s, e) => // Tämä tapahtumakäsittelijä mahdollistaa ikkunan siirtämisen
+            // This event handler enables dragging the window
+            this.MouseDown += (s, e) =>
             {
                 if (e.Button == MouseButtons.Left)
                 {
@@ -161,11 +161,11 @@ namespace OverlayApp
                 using (Brush textBrush = new SolidBrush(Color.White))
                 {
                     StringFormat format = new StringFormat();
-                    format.LineAlignment = StringAlignment.Near;
-                    format.Alignment = StringAlignment.Near;
+                    format.LineAlignment = StringAlignment.Center;
+                    format.Alignment = StringAlignment.Center;
 
-                    // Draw the time, battery percentage, and remaining time
-                    e.Graphics.DrawString(_displayText, font, textBrush, 10, 10);
+                    // Draw the simplified display string
+                    e.Graphics.DrawString(_displayText, font, textBrush, new RectangleF(0, 0, this.Width, this.Height), format);
                 }
             }
         }
@@ -186,26 +186,26 @@ namespace OverlayApp
             string timeRemaining;
             if (remainingSeconds == -1) // Indicates charging or unknown
             {
-                timeRemaining = "Lasketaan…";
+                timeRemaining = "Calculating...";
             }
             else
             {
                 TimeSpan ts = TimeSpan.FromSeconds(remainingSeconds);
                 if (ts.TotalHours >= 1)
                 {
-                    timeRemaining = $"{(int)ts.TotalHours}h {ts.Minutes}m jäljellä";
+                    timeRemaining = $"{(int)ts.TotalHours}h {ts.Minutes}m remaining";
                 }
                 else
                 {
-                    timeRemaining = $"{ts.Minutes}m jäljellä";
+                    timeRemaining = $"{ts.Minutes}m remaining";
                 }
             }
 
             // Power status
-            string powerStatusText = powerStatus.PowerLineStatus == PowerLineStatus.Online ? "Lataa" : "Purkautuu";
+            string powerStatusText = powerStatus.PowerLineStatus == PowerLineStatus.Online ? "Charging" : "Discharging";
 
-            // Format the final display string
-            _displayText = $"Aika: {DateTime.Now.ToString("h:mm tt")}\nAkku: {percent}%\nStatus: {powerStatusText}\nAikaa jäljellä: {timeRemaining}";
+            // Format the final display string with only percentage and time left
+            _displayText = $"Battery: {percent}% - Time Left: {timeRemaining}";
             
             this.Invalidate();
         }
