@@ -5,7 +5,6 @@ using System.Threading;
 using System.Windows.Forms;
 using Microsoft.Win32;
 using System.Diagnostics;
-using System.Management; // This namespace requires a separate NuGet package
 
 namespace OverlayApp
 {
@@ -124,7 +123,6 @@ namespace OverlayApp
         // Performance counters for system metrics
         private PerformanceCounter _cpuCounter;
         private PerformanceCounter _ramCounter;
-        private PerformanceCounter _networkCounter;
 
         public OverlayForm()
         {
@@ -132,7 +130,7 @@ namespace OverlayApp
             this.ShowInTaskbar = false;
             this.TopMost = true; // This forces the window to stay on top
             this.WindowState = FormWindowState.Normal;
-            this.Size = new Size(300, 120); // Resized to fit all the new information
+            this.Size = new Size(300, 100); // Resized to fit the reduced information
             
             // Load the last saved position from the Registry
             LoadWindowPosition();
@@ -187,23 +185,6 @@ namespace OverlayApp
             // Initialize performance counters
             _cpuCounter = new PerformanceCounter("Processor", "% Processor Time", "_Total");
             _ramCounter = new PerformanceCounter("Memory", "Available MBytes");
-            _networkCounter = new PerformanceCounter("Network Interface", "Bytes Total/sec", GetNetworkInterfaceName());
-        }
-        
-        // Helper method to get the network interface name
-        private string GetNetworkInterfaceName()
-        {
-            string networkInterfaceName = string.Empty;
-            ManagementObjectSearcher searcher = new ManagementObjectSearcher("SELECT * FROM Win32_NetworkAdapterConfiguration WHERE IPEnabled = 'TRUE'");
-            foreach (ManagementObject obj in searcher.Get())
-            {
-                if (obj["Description"] != null)
-                {
-                    networkInterfaceName = obj["Description"].ToString() ?? string.Empty;
-                    break;
-                }
-            }
-            return networkInterfaceName;
         }
 
 
@@ -281,18 +262,6 @@ namespace OverlayApp
             // Get performance data from the counters
             float cpuUsage = _cpuCounter.NextValue();
             float availableRamMB = _ramCounter.NextValue();
-            float networkBytesPerSec = _networkCounter.NextValue();
-
-            // Format network speed to MB/s
-            string networkSpeed;
-            if (networkBytesPerSec > 1024 * 1024)
-            {
-                networkSpeed = $"{ (networkBytesPerSec / (1024 * 1024)).ToString("F2")} MB/s";
-            }
-            else
-            {
-                networkSpeed = $"{ (networkBytesPerSec / 1024).ToString("F2")} KB/s";
-            }
             
             // Get battery status
             PowerStatus powerStatus = SystemInformation.PowerStatus;
@@ -319,8 +288,7 @@ namespace OverlayApp
             // Format the final display text with all metrics
             _displayText = $"Time Left: {timeRemaining}\n" +
                            $"CPU: {cpuUsage.ToString("F1")}%\n" +
-                           $"RAM: {availableRamMB.ToString("F0")} MB Free\n" +
-                           $"Network: {networkSpeed}\n\n" +
+                           $"RAM: {availableRamMB.ToString("F0")} MB Free\n\n" +
                            $"Developed by LostyDEV";
             
             this.Invalidate();
