@@ -9,3 +9,7 @@ Minimalist Design: A transparent, always-on-top overlay that won't clutter your 
 Customizable Position: Drag the overlay to your preferred location on the screen.
 
 Hotkey Support: Press Shift + L to toggle the overlay's visibility.
+
+
+
+To use the app, you need to install the .NET SDK 8.0.413 from the official Microsoft website. After that this software is plug-and-play.
