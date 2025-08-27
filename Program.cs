@@ -5,14 +5,15 @@ using System.Runtime.InteropServices;
 using System.Threading;
 using System.Windows.Forms;
 using Microsoft.Win32;
-using System.Diagnostics; // This is the new namespace for PerformanceCounter.
+using System.Diagnostics;
+using System.Net.NetworkInformation; // This is the missing namespace
 
 namespace OverlayApp
 {
     static class Program
     {
-        private static OverlayForm form;
-        private static TouchDetector detector;
+        private static OverlayForm? form;
+        private static TouchDetector? detector;
 
         [STAThread]
         static void Main()
@@ -115,13 +116,13 @@ namespace OverlayApp
         private const int HT_CAPTION = 0x2;
 
         private System.Windows.Forms.Timer _timer;
-        private string _displayText;
+        private string? _displayText;
         private bool _isVisible;
         
         // The custom close button
         private Button _closeButton;
 
-        // New: Performance counters for system metrics
+        // Performance counters for system metrics
         private PerformanceCounter _cpuCounter;
         private PerformanceCounter _ramCounter;
         private PerformanceCounter _networkCounter;
@@ -184,7 +185,7 @@ namespace OverlayApp
                 }
             };
 
-            // New: Initialize performance counters
+            // Initialize performance counters
             _cpuCounter = new PerformanceCounter("Processor", "% Processor Time", "_Total");
             _ramCounter = new PerformanceCounter("Memory", "Available MBytes");
             _networkCounter = new PerformanceCounter("Network Interface", "Bytes Total/sec", GetNetworkInterfaceName());
@@ -193,17 +194,17 @@ namespace OverlayApp
         // Helper method to get the network interface name
         private string GetNetworkInterfaceName()
         {
-            // The network counter needs a specific instance name
-            // We get the first one that is active
-            foreach (var networkInterface in System.Net.NetworkInformation.NetworkInterface.GetAllInterfaces())
+            // The network counter needs a specific instance name.
+            // We get the first one that is active.
+            foreach (var networkInterface in NetworkInterface.GetAllInterfaces())
             {
-                if (networkInterface.OperationalStatus == System.Net.NetworkInformation.OperationalStatus.Up && 
-                    networkInterface.NetworkInterfaceType != System.Net.NetworkInformation.NetworkInterfaceType.Loopback)
+                if (networkInterface.OperationalStatus == OperationalStatus.Up && 
+                    networkInterface.NetworkInterfaceType != NetworkInterfaceType.Loopback)
                 {
                     return networkInterface.Description;
                 }
             }
-            return "";
+            return string.Empty; // Return an empty string if no active interface is found
         }
 
 
@@ -212,12 +213,12 @@ namespace OverlayApp
             try
             {
                 // Open the specific Registry key for this application
-                RegistryKey key = Registry.CurrentUser.OpenSubKey("SOFTWARE\\BatteryOverlay");
+                RegistryKey? key = Registry.CurrentUser.OpenSubKey("SOFTWARE\\BatteryOverlay");
                 if (key != null)
                 {
                     // Read the saved position values
-                    this.Left = (int)key.GetValue("XPosition", 20);
-                    this.Top = (int)key.GetValue("YPosition", 20);
+                    this.Left = Convert.ToInt32(key.GetValue("XPosition", 20));
+                    this.Top = Convert.ToInt32(key.GetValue("YPosition", 20));
                     key.Close();
                 }
             }
@@ -234,13 +235,15 @@ namespace OverlayApp
             try
             {
                 // Create or open the specific Registry key for this application
-                RegistryKey key = Registry.CurrentUser.CreateSubKey("SOFTWARE\\BatteryOverlay");
+                RegistryKey? key = Registry.CurrentUser.CreateSubKey("SOFTWARE\\BatteryOverlay");
                 
                 // Write the current window position to the Registry
-                key.SetValue("XPosition", this.Left);
-                key.SetValue("YPosition", this.Top);
-                
-                key.Close();
+                if (key != null)
+                {
+                    key.SetValue("XPosition", this.Left);
+                    key.SetValue("YPosition", this.Top);
+                    key.Close();
+                }
             }
             catch (Exception)
             {
@@ -252,7 +255,7 @@ namespace OverlayApp
         {
             base.OnPaint(e);
 
-            if (_isVisible)
+            if (_isVisible && _displayText != null)
             {
                 // Used a smaller font size to fix the DPI issues
                 using (Font font = new Font("Arial", 12, FontStyle.Bold))
@@ -265,14 +268,13 @@ namespace OverlayApp
                     // Set up the layout
                     float x = 5;
                     float y = 5;
-                    float lineHeight = 18;
 
                     e.Graphics.DrawString(_displayText, font, textBrush, x, y);
                 }
             }
         }
 
-        private void Timer_Tick(object sender, EventArgs e)
+        private void Timer_Tick(object? sender, EventArgs e)
         {
             if (!_isVisible)
                 return;
