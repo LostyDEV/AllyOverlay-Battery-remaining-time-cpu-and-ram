@@ -4,6 +4,7 @@ using System.IO;
 using System.Runtime.InteropServices;
 using System.Threading;
 using System.Windows.Forms;
+using Microsoft.Win32;
 
 namespace OverlayApp
 {
@@ -116,9 +117,8 @@ namespace OverlayApp
         private string _displayText;
         private bool _isVisible;
         
-        // Path to the file where the position is saved
-        private readonly string _positionFilePath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "BatteryOverlayPosition.txt");
-
+        // New: The custom close button
+        private Button _closeButton;
 
         public OverlayForm()
         {
@@ -128,11 +128,28 @@ namespace OverlayApp
             this.WindowState = FormWindowState.Normal;
             this.Size = new Size(300, 60);
             
-            // Load the last saved position when the form starts
+            // Load the last saved position from the Registry
             LoadWindowPosition();
-            
+
             this.BackColor = Color.Black;
             this.TransparencyKey = this.BackColor;
+
+            // New: Initialize and style the close button
+            _closeButton = new Button();
+            _closeButton.Text = "X";
+            _closeButton.Font = new Font("Arial", 8, FontStyle.Bold);
+            _closeButton.Size = new Size(20, 20);
+            _closeButton.BackColor = Color.Red;
+            _closeButton.ForeColor = Color.White;
+            _closeButton.FlatStyle = FlatStyle.Flat;
+            _closeButton.FlatAppearance.BorderSize = 0;
+            _closeButton.Location = new Point(this.Width - _closeButton.Width - 5, 5);
+            
+            // New: Add the click event handler to the button
+            _closeButton.Click += (s, e) => this.Close();
+
+            // New: Add the button to the form's controls
+            this.Controls.Add(_closeButton);
 
             _timer = new System.Windows.Forms.Timer()
             {
@@ -146,7 +163,7 @@ namespace OverlayApp
             RegisterHotKey(this.Handle, HOTKEY_ID, MOD_SHIFT, VK_L);
             this.FormClosing += (s, e) => 
             {
-                // Save the window position when the form is closing
+                // Save the window position to the Registry when the form is closing
                 SaveWindowPosition();
                 UnregisterHotKey(this.Handle, HOTKEY_ID);
             };
@@ -166,25 +183,19 @@ namespace OverlayApp
         {
             try
             {
-                if (File.Exists(_positionFilePath))
+                // Open the specific Registry key for this application
+                RegistryKey key = Registry.CurrentUser.OpenSubKey("SOFTWARE\\BatteryOverlay");
+                if (key != null)
                 {
-                    string[] position = File.ReadAllText(_positionFilePath).Split(',');
-                    if (position.Length == 2)
-                    {
-                        this.Left = int.Parse(position[0]);
-                        this.Top = int.Parse(position[1]);
-                    }
-                }
-                else
-                {
-                    // If the file doesn't exist, use a default position (top-left)
-                    this.Top = 20;
-                    this.Left = 20;
+                    // Read the saved position values
+                    this.Left = (int)key.GetValue("XPosition", 20);
+                    this.Top = (int)key.GetValue("YPosition", 20);
+                    key.Close();
                 }
             }
             catch (Exception)
             {
-                // In case of an error, just use the default position
+                // If there is an error, just use the default position
                 this.Top = 20;
                 this.Left = 20;
             }
@@ -194,15 +205,14 @@ namespace OverlayApp
         {
             try
             {
-                // Get the directory path and ensure it exists
-                string directory = Path.GetDirectoryName(_positionFilePath);
-                if (!Directory.Exists(directory))
-                {
-                    Directory.CreateDirectory(directory);
-                }
+                // Create or open the specific Registry key for this application
+                RegistryKey key = Registry.CurrentUser.CreateSubKey("SOFTWARE\\BatteryOverlay");
                 
-                // Write the current window position to the file
-                File.WriteAllText(_positionFilePath, $"{this.Left},{this.Top}");
+                // Write the current window position to the Registry
+                key.SetValue("XPosition", this.Left);
+                key.SetValue("YPosition", this.Top);
+                
+                key.Close();
             }
             catch (Exception)
             {
@@ -265,6 +275,9 @@ namespace OverlayApp
             _isVisible = !_isVisible;
             UpdateWindowPosition();
             this.Invalidate();
+            
+            // New: Show or hide the close button when visibility is toggled
+            _closeButton.Visible = _isVisible;
         }
 
         private void UpdateWindowPosition()
