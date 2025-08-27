@@ -126,7 +126,7 @@ namespace OverlayApp
             this.ShowInTaskbar = false;
             this.TopMost = true; // This forces the window to stay on top
             this.WindowState = FormWindowState.Normal;
-            this.Size = new Size(300, 60); // Window size remains small
+            this.Size = new Size(300, 60);
             
             // Load the last saved position when the form starts
             LoadWindowPosition();
@@ -194,6 +194,13 @@ namespace OverlayApp
         {
             try
             {
+                // Get the directory path and ensure it exists
+                string directory = Path.GetDirectoryName(_positionFilePath);
+                if (!Directory.Exists(directory))
+                {
+                    Directory.CreateDirectory(directory);
+                }
+                
                 // Write the current window position to the file
                 File.WriteAllText(_positionFilePath, $"{this.Left},{this.Top}");
             }
@@ -209,7 +216,7 @@ namespace OverlayApp
 
             if (_isVisible)
             {
-                // Changed the font size from 20 to 14 to fix DPI issues
+                // Used a smaller font size to fix the DPI issues
                 using (Font font = new Font("Arial", 14, FontStyle.Bold))
                 using (Brush textBrush = new SolidBrush(Color.White))
                 {
