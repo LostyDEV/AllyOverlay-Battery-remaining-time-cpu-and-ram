@@ -3,7 +3,7 @@ name: Build & Release Battery Overlay
 on:
   push:
     tags:
-      - "v*" # e.g., v1.0.3
+      - "v*" # e.g., v1.0.0
   workflow_dispatch: # Manual run from button
 
 permissions:
@@ -31,15 +31,15 @@ jobs:
       - name: Create zip
         shell: pwsh
         run: |
-          Compress-Archive -Path "bin/Release/net8.0-windows/win-x64/publish/*" -DestinationPath "OverlayApp-v1.0.3.zip" -Force
+          Compress-Archive -Path "bin/Release/net8.0-windows/win-x64/publish/*" -DestinationPath "OverlayApp-v1.0.4.zip" -Force
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           files: |
             bin/Release/net8.0-windows/win-x64/publish/OverlayApp.exe
-            OverlayApp-v1.0.3.zip
-          name: Version 1.0.3
-          tag_name: v1.0.3
+            OverlayApp-v1.0.4.zip
+          name: Version 1.0.4
+          tag_name: v1.0.4
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
