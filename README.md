@@ -19,9 +19,12 @@ Compatibility
 This app has been tested on the ASUS ROG Ally Z1 Extreme. It may work with other Windows handhelds, but this has not been officially tested.
 
 
+
+
+
 I'm incredibly happy to help out the PC handheld gaming community. If my work has made a difference for you, a small gesture like buying me a coffee or a beer would be greatly appreciated. Thank you all for your support!
 
-github: # LostyDEV
+Github: # LostyDEV
 USDC: 0xe33d2edde60fd6d16ed55d6452b052e75fdab26a
 BNB: 0xe33d2edde60fd6d16ed55d6452b052e75fdab26a
 ETH: 0xe33d2edde60fd6d16ed55d6452b052e75fdab26a
