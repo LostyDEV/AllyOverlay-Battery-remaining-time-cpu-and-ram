@@ -126,7 +126,7 @@ namespace OverlayApp
             this.ShowInTaskbar = false;
             this.TopMost = true; // This forces the window to stay on top
             this.WindowState = FormWindowState.Normal;
-            this.Size = new Size(300, 60); // Made the window smaller
+            this.Size = new Size(300, 60); // Window size remains small
             
             // Load the last saved position when the form starts
             LoadWindowPosition();
@@ -209,7 +209,8 @@ namespace OverlayApp
 
             if (_isVisible)
             {
-                using (Font font = new Font("Arial", 20, FontStyle.Bold))
+                // Changed the font size from 20 to 14 to fix DPI issues
+                using (Font font = new Font("Arial", 14, FontStyle.Bold))
                 using (Brush textBrush = new SolidBrush(Color.White))
                 {
                     StringFormat format = new StringFormat();
