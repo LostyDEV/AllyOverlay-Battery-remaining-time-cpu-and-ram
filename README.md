@@ -20,6 +20,9 @@ This app has been tested on the ASUS ROG Ally Z1 Extreme. It may work with other
 
 
 
+<img width="1185" height="768" alt="dev" src="https://github.com/user-attachments/assets/0c14fd34-3456-4328-a3da-362370ef626b" />
+
+
 
 
 I'm incredibly happy to help out the PC handheld gaming community. If my work has made a difference for you, a small gesture like buying me a coffee or a beer would be greatly appreciated. Thank you all for your support!
