@@ -5,7 +5,7 @@ using System.Threading;
 using System.Windows.Forms;
 using Microsoft.Win32;
 using System.Diagnostics;
-using System.Management; // This is the new namespace for ManagementObjectSearcher
+using System.Management; // This namespace requires a separate NuGet package
 
 namespace OverlayApp
 {
@@ -197,8 +197,11 @@ namespace OverlayApp
             ManagementObjectSearcher searcher = new ManagementObjectSearcher("SELECT * FROM Win32_NetworkAdapterConfiguration WHERE IPEnabled = 'TRUE'");
             foreach (ManagementObject obj in searcher.Get())
             {
-                networkInterfaceName = obj["Description"].ToString();
-                break;
+                if (obj["Description"] != null)
+                {
+                    networkInterfaceName = obj["Description"].ToString() ?? string.Empty;
+                    break;
+                }
             }
             return networkInterfaceName;
         }
