@@ -5,6 +5,7 @@ using System.Runtime.InteropServices;
 using System.Threading;
 using System.Windows.Forms;
 using Microsoft.Win32;
+using System.Diagnostics; // This is the new namespace for PerformanceCounter.
 
 namespace OverlayApp
 {
@@ -117,8 +118,13 @@ namespace OverlayApp
         private string _displayText;
         private bool _isVisible;
         
-        // New: The custom close button
+        // The custom close button
         private Button _closeButton;
+
+        // New: Performance counters for system metrics
+        private PerformanceCounter _cpuCounter;
+        private PerformanceCounter _ramCounter;
+        private PerformanceCounter _networkCounter;
 
         public OverlayForm()
         {
@@ -126,7 +132,7 @@ namespace OverlayApp
             this.ShowInTaskbar = false;
             this.TopMost = true; // This forces the window to stay on top
             this.WindowState = FormWindowState.Normal;
-            this.Size = new Size(300, 60);
+            this.Size = new Size(300, 120); // Resized to fit all the new information
             
             // Load the last saved position from the Registry
             LoadWindowPosition();
@@ -134,7 +140,7 @@ namespace OverlayApp
             this.BackColor = Color.Black;
             this.TransparencyKey = this.BackColor;
 
-            // New: Initialize and style the close button
+            // Initialize and style the close button
             _closeButton = new Button();
             _closeButton.Text = "X";
             _closeButton.Font = new Font("Arial", 8, FontStyle.Bold);
@@ -145,10 +151,10 @@ namespace OverlayApp
             _closeButton.FlatAppearance.BorderSize = 0;
             _closeButton.Location = new Point(this.Width - _closeButton.Width - 5, 5);
             
-            // New: Add the click event handler to the button
+            // Add the click event handler to the button
             _closeButton.Click += (s, e) => this.Close();
 
-            // New: Add the button to the form's controls
+            // Add the button to the form's controls
             this.Controls.Add(_closeButton);
 
             _timer = new System.Windows.Forms.Timer()
@@ -177,7 +183,29 @@ namespace OverlayApp
                     SendMessage(this.Handle, WM_NCLBUTTONDOWN, HT_CAPTION, 0);
                 }
             };
+
+            // New: Initialize performance counters
+            _cpuCounter = new PerformanceCounter("Processor", "% Processor Time", "_Total");
+            _ramCounter = new PerformanceCounter("Memory", "Available MBytes");
+            _networkCounter = new PerformanceCounter("Network Interface", "Bytes Total/sec", GetNetworkInterfaceName());
         }
+        
+        // Helper method to get the network interface name
+        private string GetNetworkInterfaceName()
+        {
+            // The network counter needs a specific instance name
+            // We get the first one that is active
+            foreach (var networkInterface in System.Net.NetworkInformation.NetworkInterface.GetAllInterfaces())
+            {
+                if (networkInterface.OperationalStatus == System.Net.NetworkInformation.OperationalStatus.Up && 
+                    networkInterface.NetworkInterfaceType != System.Net.NetworkInformation.NetworkInterfaceType.Loopback)
+                {
+                    return networkInterface.Description;
+                }
+            }
+            return "";
+        }
+
 
         private void LoadWindowPosition()
         {
@@ -227,14 +255,19 @@ namespace OverlayApp
             if (_isVisible)
             {
                 // Used a smaller font size to fix the DPI issues
-                using (Font font = new Font("Arial", 14, FontStyle.Bold))
+                using (Font font = new Font("Arial", 12, FontStyle.Bold))
                 using (Brush textBrush = new SolidBrush(Color.White))
                 {
                     StringFormat format = new StringFormat();
-                    format.LineAlignment = StringAlignment.Center;
-                    format.Alignment = StringAlignment.Center;
+                    format.LineAlignment = StringAlignment.Near;
+                    format.Alignment = StringAlignment.Near;
 
-                    e.Graphics.DrawString(_displayText, font, textBrush, new RectangleF(0, 0, this.Width, this.Height), format);
+                    // Set up the layout
+                    float x = 5;
+                    float y = 5;
+                    float lineHeight = 18;
+
+                    e.Graphics.DrawString(_displayText, font, textBrush, x, y);
                 }
             }
         }
@@ -244,6 +277,23 @@ namespace OverlayApp
             if (!_isVisible)
                 return;
 
+            // Get performance data from the counters
+            float cpuUsage = _cpuCounter.NextValue();
+            float availableRamMB = _ramCounter.NextValue();
+            float networkBytesPerSec = _networkCounter.NextValue();
+
+            // Format network speed to MB/s
+            string networkSpeed;
+            if (networkBytesPerSec > 1024 * 1024)
+            {
+                networkSpeed = $"{ (networkBytesPerSec / (1024 * 1024)).ToString("F2")} MB/s";
+            }
+            else
+            {
+                networkSpeed = $"{ (networkBytesPerSec / 1024).ToString("F2")} KB/s";
+            }
+            
+            // Get battery status
             PowerStatus powerStatus = SystemInformation.PowerStatus;
             
             int remainingSeconds = powerStatus.BatteryLifeRemaining;
@@ -265,7 +315,12 @@ namespace OverlayApp
                 }
             }
             
-            _displayText = $"Time Left: {timeRemaining}";
+            // Format the final display text with all metrics
+            _displayText = $"Time Left: {timeRemaining}\n" +
+                           $"CPU: {cpuUsage.ToString("F1")}%\n" +
+                           $"RAM: {availableRamMB.ToString("F0")} MB Free\n" +
+                           $"Network: {networkSpeed}\n\n" +
+                           $"Developed by LostyDEV";
             
             this.Invalidate();
         }
@@ -276,7 +331,7 @@ namespace OverlayApp
             UpdateWindowPosition();
             this.Invalidate();
             
-            // New: Show or hide the close button when visibility is toggled
+            // Show or hide the close button when visibility is toggled
             _closeButton.Visible = _isVisible;
         }
 
