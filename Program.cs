@@ -83,21 +83,30 @@ namespace OverlayApp
 
     public class OverlayForm : Form
     {
+        // Import necessary Windows functions
         [DllImport("user32.dll")]
         private static extern bool SetWindowPos(IntPtr hWnd, int hWndInsertAfter, int X, int Y, int cx, int cy, uint uFlags);
         [DllImport("user32.dll")]
         private static extern bool RegisterHotKey(IntPtr hWnd, int id, uint fsModifiers, uint vk);
         [DllImport("user32.dll")]
         private static extern bool UnregisterHotKey(IntPtr hWnd, int id);
+        [DllImport("user32.dll")]
+        private static extern bool ReleaseCapture();
+        [DllImport("user32.dll")]
+        private static extern int SendMessage(IntPtr hWnd, int Msg, int wParam, int lParam);
 
+        // Constants for window management
         private const int SWP_NOSIZE = 0x0001;
         private const int SWP_NOMOVE = 0x0002;
         private const int HWND_TOPMOST = -1;
-
         private const int WM_HOTKEY = 0x0312;
         private const uint MOD_SHIFT = 0x0004;
         private const uint VK_L = 0x4C;
         private const int HOTKEY_ID = 9000;
+        
+        // Constants for dragging
+        private const int WM_NCLBUTTONDOWN = 0xA1;
+        private const int HT_CAPTION = 0x2;
 
         private System.Windows.Forms.Timer _timer;
         private string _displayText;
@@ -127,6 +136,16 @@ namespace OverlayApp
 
             RegisterHotKey(this.Handle, HOTKEY_ID, MOD_SHIFT, VK_L);
             this.FormClosing += (s, e) => UnregisterHotKey(this.Handle, HOTKEY_ID);
+
+            // Enable dragging the form
+            this.MouseDown += (s, e) =>
+            {
+                if (e.Button == MouseButtons.Left)
+                {
+                    ReleaseCapture();
+                    SendMessage(this.Handle, WM_NCLBUTTONDOWN, HT_CAPTION, 0);
+                }
+            };
         }
 
         protected override void OnPaint(PaintEventArgs e)
@@ -135,7 +154,7 @@ namespace OverlayApp
 
             if (_isVisible)
             {
-                using (Font font = new Font("Arial", 16, FontStyle.Bold))
+                using (Font font = new Font("Arial", 10, FontStyle.Bold)) // Font size is now smaller
                 using (Brush textBrush = new SolidBrush(Color.White))
                 {
                     StringFormat format = new StringFormat();
