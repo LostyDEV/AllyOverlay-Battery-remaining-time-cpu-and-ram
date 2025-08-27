@@ -1,12 +1,11 @@
 using System;
 using System.Drawing;
-using System.IO;
 using System.Runtime.InteropServices;
 using System.Threading;
 using System.Windows.Forms;
 using Microsoft.Win32;
 using System.Diagnostics;
-using System.Net.NetworkInformation; // This is the missing namespace
+using System.Management; // This is the new namespace for ManagementObjectSearcher
 
 namespace OverlayApp
 {
@@ -194,17 +193,14 @@ namespace OverlayApp
         // Helper method to get the network interface name
         private string GetNetworkInterfaceName()
         {
-            // The network counter needs a specific instance name.
-            // We get the first one that is active.
-            foreach (var networkInterface in NetworkInterface.GetAllInterfaces())
+            string networkInterfaceName = string.Empty;
+            ManagementObjectSearcher searcher = new ManagementObjectSearcher("SELECT * FROM Win32_NetworkAdapterConfiguration WHERE IPEnabled = 'TRUE'");
+            foreach (ManagementObject obj in searcher.Get())
             {
-                if (networkInterface.OperationalStatus == OperationalStatus.Up && 
-                    networkInterface.NetworkInterfaceType != NetworkInterfaceType.Loopback)
-                {
-                    return networkInterface.Description;
-                }
+                networkInterfaceName = obj["Description"].ToString();
+                break;
             }
-            return string.Empty; // Return an empty string if no active interface is found
+            return networkInterfaceName;
         }
 
 
