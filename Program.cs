@@ -14,6 +14,9 @@ namespace OverlayApp
         [STAThread]
         static void Main()
         {
+            // Set the application to be DPI-aware for sharp text on high-resolution screens
+            Application.SetHighDpiMode(HighDpiMode.SystemAware);
+
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
             form = new OverlayForm();
@@ -116,9 +119,9 @@ namespace OverlayApp
         {
             this.FormBorderStyle = FormBorderStyle.None;
             this.ShowInTaskbar = false;
-            this.TopMost = true;
+            this.TopMost = true; // Tämä ominaisuus pakottaa ikkunan pysymään aina päällä
             this.WindowState = FormWindowState.Normal;
-            this.Size = new Size(320, 120);
+            this.Size = new Size(400, 150); // Adjusted size to fit larger font
             this.Top = 20;
             this.Left = 20;
 
@@ -138,7 +141,7 @@ namespace OverlayApp
             this.FormClosing += (s, e) => UnregisterHotKey(this.Handle, HOTKEY_ID);
 
             // Enable dragging the form
-            this.MouseDown += (s, e) =>
+            this.MouseDown += (s, e) => // Tämä tapahtumakäsittelijä mahdollistaa ikkunan siirtämisen
             {
                 if (e.Button == MouseButtons.Left)
                 {
@@ -154,7 +157,7 @@ namespace OverlayApp
 
             if (_isVisible)
             {
-                using (Font font = new Font("Arial", 10, FontStyle.Bold)) // Font size is now smaller
+                using (Font font = new Font("Arial", 20, FontStyle.Bold)) // Font size is now larger for 1080p
                 using (Brush textBrush = new SolidBrush(Color.White))
                 {
                     StringFormat format = new StringFormat();
@@ -183,26 +186,26 @@ namespace OverlayApp
             string timeRemaining;
             if (remainingSeconds == -1) // Indicates charging or unknown
             {
-                timeRemaining = "Calculating...";
+                timeRemaining = "Lasketaan…";
             }
             else
             {
                 TimeSpan ts = TimeSpan.FromSeconds(remainingSeconds);
                 if (ts.TotalHours >= 1)
                 {
-                    timeRemaining = $"{(int)ts.TotalHours}h {ts.Minutes}m remaining";
+                    timeRemaining = $"{(int)ts.TotalHours}h {ts.Minutes}m jäljellä";
                 }
                 else
                 {
-                    timeRemaining = $"{ts.Minutes}m remaining";
+                    timeRemaining = $"{ts.Minutes}m jäljellä";
                 }
             }
 
             // Power status
-            string powerStatusText = powerStatus.PowerLineStatus == PowerLineStatus.Online ? "Charging" : "Discharging";
+            string powerStatusText = powerStatus.PowerLineStatus == PowerLineStatus.Online ? "Lataa" : "Purkautuu";
 
             // Format the final display string
-            _displayText = $"Time: {DateTime.Now.ToString("h:mm tt")}\nBattery: {percent}%\nStatus: {powerStatusText}\nTime Left: {timeRemaining}";
+            _displayText = $"Aika: {DateTime.Now.ToString("h:mm tt")}\nAkku: {percent}%\nStatus: {powerStatusText}\nAikaa jäljellä: {timeRemaining}";
             
             this.Invalidate();
         }
