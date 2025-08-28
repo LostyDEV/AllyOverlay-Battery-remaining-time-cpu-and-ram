@@ -124,6 +124,9 @@ namespace OverlayApp
         private PerformanceCounter _cpuCounter;
         private PerformanceCounter _ramCounter;
 
+        // Private field to store the time the form was loaded
+        private DateTime _splashTextTime;
+
         public OverlayForm()
         {
             this.FormBorderStyle = FormBorderStyle.None;
@@ -185,6 +188,9 @@ namespace OverlayApp
             // Initialize performance counters
             _cpuCounter = new PerformanceCounter("Processor", "% Processor Time", "_Total");
             _ramCounter = new PerformanceCounter("Memory", "Available MBytes");
+
+            // Store the time when the form was created
+            _splashTextTime = DateTime.Now;
         }
 
 
@@ -285,11 +291,17 @@ namespace OverlayApp
                 }
             }
             
+            string developerText = "";
+            if ((DateTime.Now - _splashTextTime).TotalSeconds <= 10)
+            {
+                developerText = "\n\nDeveloped by LostyDEV";
+            }
+
             // Format the final display text with all metrics
             _displayText = $"Time Left: {timeRemaining}\n" +
                            $"CPU: {cpuUsage.ToString("F1")}%\n" +
-                           $"RAM: {availableRamMB.ToString("F0")} MB Free\n\n" +
-                           $"Developed by LostyDEV";
+                           $"RAM: {availableRamMB.ToString("F0")} MB Free" +
+                           developerText;
             
             this.Invalidate();
         }
