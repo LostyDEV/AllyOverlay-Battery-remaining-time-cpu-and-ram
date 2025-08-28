@@ -5,6 +5,7 @@ using System.Threading;
 using System.Windows.Forms;
 using Microsoft.Win32;
 using System.Diagnostics;
+using System.Threading.Tasks; // Added for Task.Delay
 
 namespace OverlayApp
 {
@@ -53,22 +54,32 @@ namespace OverlayApp
             {
                 while (true)
                 {
-                    if ((GetAsyncKeyState(VK_LBUTTON) & 0x8000) != 0)
+                    if (GetAsyncKeyState(VK_LBUTTON) != 0)
                     {
-                        int y = Cursor.Position.Y;
-                        if (y < TopScreenTolerance)
+                        if (!isMouseDown)
                         {
-                            if (!isMouseDown)
+                            isMouseDown = true;
+                            Point cursorPos = Cursor.Position;
+                            if (cursorPos.Y <= TopScreenTolerance)
                             {
-                                isMouseDown = true;
-                                startY = y;
+                                startY = cursorPos.Y;
                             }
                         }
-                        else
+
+                        if (isMouseDown)
                         {
-                            if (isMouseDown && y - startY > DragThreshold)
+                            Point currentPos = Cursor.Position;
+                            if (currentPos.Y - startY >= DragThreshold)
                             {
-                                _form.ToggleVisibility();
+                                // Drag down gesture detected, show the form
+                                _form.Invoke(new MethodInvoker(() =>
+                                {
+                                    if (!_form.IsVisible)
+                                    {
+                                        _form.ToggleVisibility();
+                                    }
+                                }));
+                                // Reset for next gesture
                                 isMouseDown = false;
                             }
                         }
@@ -77,10 +88,11 @@ namespace OverlayApp
                     {
                         isMouseDown = false;
                     }
-                    Thread.Sleep(16);
+
+                    // Sleep for a short duration to prevent high CPU usage
+                    Thread.Sleep(10);
                 }
             });
-
             thread.IsBackground = true;
             thread.Start();
         }
@@ -88,196 +100,183 @@ namespace OverlayApp
 
     public class OverlayForm : Form
     {
-        // Import necessary Windows functions
-        [DllImport("user32.dll")]
-        private static extern bool SetWindowPos(IntPtr hWnd, int hWndInsertAfter, int X, int Y, int cx, int cy, uint uFlags);
-        [DllImport("user32.dll")]
-        private static extern bool RegisterHotKey(IntPtr hWnd, int id, uint fsModifiers, uint vk);
-        [DllImport("user32.dll")]
-        private static extern bool UnregisterHotKey(IntPtr hWnd, int id);
-        [DllImport("user32.dll")]
-        private static extern bool ReleaseCapture();
-        [DllImport("user32.dll")]
-        private static extern int SendMessage(IntPtr hWnd, int Msg, int wParam, int lParam);
+        // P/Invoke declarations for window management
+        private const int GWL_EXSTYLE = -20;
+        private const int WS_EX_TOPMOST = 0x0008;
+        private const int WS_EX_NOACTIVATE = 0x08000000;
+        private const int WS_EX_TOOLWINDOW = 0x00000080;
+        private const int WS_EX_TRANSPARENT = 0x00000020;
+        private const int WS_EX_LAYERED = 0x80000;
+        private const int LWA_ALPHA = 0x2;
 
-        // Constants for window management
-        private const int SWP_NOSIZE = 0x0001;
-        private const int SWP_NOMOVE = 0x0002;
-        private const int HWND_TOPMOST = -1;
-        private const int WM_HOTKEY = 0x0312;
-        private const uint MOD_SHIFT = 0x0004;
-        private const uint VK_L = 0x4C;
-        private const int HOTKEY_ID = 9000;
-        
-        // Constants for dragging
-        private const int WM_NCLBUTTONDOWN = 0xA1;
-        private const int HT_CAPTION = 0x2;
+        [DllImport("user32.dll")]
+        private static extern IntPtr GetWindowLong(IntPtr hWnd, int nIndex);
 
+        [DllImport("user32.dll")]
+        private static extern IntPtr SetWindowLong(IntPtr hWnd, int nIndex, int dwNewLong);
+
+        [DllImport("user32.dll")]
+        private static extern bool SetLayeredWindowAttributes(IntPtr hWnd, uint crKey, byte bAlpha, uint dwFlags);
+
+        [DllImport("user32.dll")]
+        private static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter, int X, int Y, int cx, int cy, uint uFlags);
+
+        // Window position constants
+        private static readonly IntPtr HWND_TOPMOST = new IntPtr(-1);
+        private const uint SWP_NOSIZE = 0x0001;
+        private const uint SWP_NOMOVE = 0x0002;
+        private const uint SWP_SHOWWINDOW = 0x0040;
+
+        // Hotkey constants
+        [DllImport("user32.dll")]
+        public static extern bool RegisterHotKey(IntPtr hWnd, int id, int fsModifiers, int vk);
+        [DllImport("user32.dll")]
+        public static extern bool UnregisterHotKey(IntPtr hWnd, int id);
+        public const int WM_HOTKEY = 0x0312;
+        public const int HOTKEY_ID = 1;
+
+        // UI related fields
+        private string _displayText = "";
         private System.Windows.Forms.Timer _timer;
-        private string? _displayText;
-        private bool _isVisible;
-        
-        // The custom close button
+        private System.Windows.Forms.Timer _devTextTimer; // Timer for the temporary "LostyDEV" text
+        private bool _showDevText = true; // Flag to control the "LostyDEV" text visibility
         private Button _closeButton;
 
-        // Performance counters for system metrics
+        // System metrics
+        private PowerStatus _powerStatus;
         private PerformanceCounter _cpuCounter;
         private PerformanceCounter _ramCounter;
+
+        public bool IsVisible { get; private set; } = true;
+        private const int REFRESH_INTERVAL = 1000; // Refresh interval in milliseconds
 
         public OverlayForm()
         {
             this.FormBorderStyle = FormBorderStyle.None;
             this.ShowInTaskbar = false;
-            this.TopMost = true; // This forces the window to stay on top
-            this.WindowState = FormWindowState.Normal;
-            this.Size = new Size(300, 100); // Resized to fit the reduced information
-            
-            // Load the last saved position from the Registry
-            LoadWindowPosition();
+            this.Size = new Size(300, 150);
+            this.StartPosition = FormStartPosition.Manual;
 
+            // Set up initial position to be in the center of the screen at the top
+            int screenWidth = Screen.PrimaryScreen.WorkingArea.Width;
+            int x = (screenWidth - this.Width) / 2;
+            int y = 0; // Position at the top
+            this.Location = new Point(x, y);
+
+            this.TopMost = true;
+            this.AllowTransparency = true;
             this.BackColor = Color.Black;
-            this.TransparencyKey = this.BackColor;
+            this.TransparencyKey = Color.Black;
 
-            // Initialize and style the close button
+            // Make the window click-through and non-focusable
+            SetWindowLong(this.Handle, GWL_EXSTYLE, (IntPtr)((long)GetWindowLong(this.Handle, GWL_EXSTYLE) | WS_EX_TRANSPARENT | WS_EX_NOACTIVATE | WS_EX_TOOLWINDOW));
+            SetLayeredWindowAttributes(this.Handle, 0, 255, LWA_ALPHA);
+
+            // Set up the close button
             _closeButton = new Button();
             _closeButton.Text = "X";
-            _closeButton.Font = new Font("Arial", 8, FontStyle.Bold);
-            _closeButton.Size = new Size(20, 20);
-            _closeButton.BackColor = Color.Red;
             _closeButton.ForeColor = Color.White;
-            _closeButton.FlatStyle = FlatStyle.Flat;
+            _closeButton.BackColor = Color.DarkRed;
             _closeButton.FlatAppearance.BorderSize = 0;
+            _closeButton.FlatStyle = FlatStyle.Flat;
+            _closeButton.Font = new Font("Segoe UI", 8, FontStyle.Bold);
+            _closeButton.Size = new Size(20, 20);
             _closeButton.Location = new Point(this.Width - _closeButton.Width - 5, 5);
-            
-            // Add the click event handler to the button
-            _closeButton.Click += (s, e) => this.Close();
-
-            // Add the button to the form's controls
+            _closeButton.Click += (sender, e) => { this.Close(); };
+            _closeButton.Visible = false;
             this.Controls.Add(_closeButton);
 
-            _timer = new System.Windows.Forms.Timer()
-            {
-                Interval = 1000,
-                Enabled = true,
-            };
-            _timer.Tick += Timer_Tick;
+            // Register the hotkey Shift + L
+            RegisterHotKey(this.Handle, HOTKEY_ID, (int)Keys.Shift, (int)Keys.L);
 
-            _isVisible = true;
-
-            RegisterHotKey(this.Handle, HOTKEY_ID, MOD_SHIFT, VK_L);
-            this.FormClosing += (s, e) => 
-            {
-                // Save the window position to the Registry when the form is closing
-                SaveWindowPosition();
-                UnregisterHotKey(this.Handle, HOTKEY_ID);
-            };
-
-            // This event handler enables dragging the window
-            this.MouseDown += (s, e) =>
-            {
-                if (e.Button == MouseButtons.Left)
-                {
-                    ReleaseCapture();
-                    SendMessage(this.Handle, WM_NCLBUTTONDOWN, HT_CAPTION, 0);
-                }
-            };
-
-            // Initialize performance counters
-            _cpuCounter = new PerformanceCounter("Processor", "% Processor Time", "_Total");
-            _ramCounter = new PerformanceCounter("Memory", "Available MBytes");
-        }
-
-
-        private void LoadWindowPosition()
-        {
+            // Initialize system performance counters
             try
             {
-                // Open the specific Registry key for this application
-                RegistryKey? key = Registry.CurrentUser.OpenSubKey("SOFTWARE\\BatteryOverlay");
-                if (key != null)
-                {
-                    // Read the saved position values
-                    this.Left = Convert.ToInt32(key.GetValue("XPosition", 20));
-                    this.Top = Convert.ToInt32(key.GetValue("YPosition", 20));
-                    key.Close();
-                }
+                _powerStatus = SystemInformation.PowerStatus;
+                _cpuCounter = new PerformanceCounter("Processor", "% Processor Time", "_Total");
+                _ramCounter = new PerformanceCounter("Memory", "Available MBytes");
             }
-            catch (Exception)
+            catch (Exception ex)
             {
-                // If there is an error, just use the default position
-                this.Top = 20;
-                this.Left = 20;
+                // Handle exceptions if performance counters are not accessible
+                _displayText = $"Error: {ex.Message}";
+                _cpuCounter = null;
+                _ramCounter = null;
             }
+
+            // Set up the main timer for updates
+            _timer = new System.Windows.Forms.Timer();
+            _timer.Interval = REFRESH_INTERVAL;
+            _timer.Tick += OnTimerTick;
+            _timer.Start();
+
+            // Set up a timer for the "LostyDEV" text
+            _devTextTimer = new System.Windows.Forms.Timer();
+            _devTextTimer.Interval = 10000; // 10 seconds
+            _devTextTimer.Tick += (sender, e) =>
+            {
+                _showDevText = false;
+                _devTextTimer.Stop(); // Stop the timer after it fires once
+                this.Invalidate(); // Redraw the form to remove the text
+            };
+            _devTextTimer.Start();
         }
-        
-        private void SaveWindowPosition()
-        {
-            try
-            {
-                // Create or open the specific Registry key for this application
-                RegistryKey? key = Registry.CurrentUser.CreateSubKey("SOFTWARE\\BatteryOverlay");
-                
-                // Write the current window position to the Registry
-                if (key != null)
-                {
-                    key.SetValue("XPosition", this.Left);
-                    key.SetValue("YPosition", this.Top);
-                    key.Close();
-                }
-            }
-            catch (Exception)
-            {
-                // Do nothing if saving fails, as it's not critical
-            }
-        }
-        
+
         protected override void OnPaint(PaintEventArgs e)
         {
-            base.OnPaint(e);
+            if (!IsVisible) return;
 
-            if (_isVisible && _displayText != null)
+            e.Graphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+            e.Graphics.TextRenderingHint = System.Drawing.Text.TextRenderingHint.AntiAlias;
+
+            // Draw a semi-transparent background
+            using (SolidBrush brush = new SolidBrush(Color.FromArgb(150, 0, 0, 0)))
             {
-                // Used a smaller font size to fix the DPI issues
-                using (Font font = new Font("Arial", 12, FontStyle.Bold))
-                using (Brush textBrush = new SolidBrush(Color.White))
+                e.Graphics.FillRectangle(brush, new Rectangle(0, 0, this.Width, this.Height));
+            }
+
+            // Draw the metrics text
+            using (Font font = new Font("Inter", 12, FontStyle.Bold))
+            using (SolidBrush textBrush = new SolidBrush(Color.White))
+            {
+                StringFormat sf = new StringFormat();
+                sf.Alignment = StringAlignment.Near;
+                sf.LineAlignment = StringAlignment.Near;
+                e.Graphics.DrawString(_displayText, font, textBrush, new RectangleF(10, 10, this.Width - 20, this.Height - 20), sf);
+            }
+
+            // Conditionally draw the "LostyDEV" text
+            if (_showDevText)
+            {
+                using (Font font = new Font("Inter", 10, FontStyle.Italic))
+                using (SolidBrush devTextBrush = new SolidBrush(Color.FromArgb(150, 255, 255, 255)))
                 {
-                    StringFormat format = new StringFormat();
-                    format.LineAlignment = StringAlignment.Near;
-                    format.Alignment = StringAlignment.Near;
-
-                    // Set up the layout
-                    float x = 5;
-                    float y = 5;
-
-                    e.Graphics.DrawString(_displayText, font, textBrush, x, y);
+                    StringFormat sf = new StringFormat();
+                    sf.Alignment = StringAlignment.Center;
+                    sf.LineAlignment = StringAlignment.Far;
+                    e.Graphics.DrawString("Developed by LostyDEV", font, devTextBrush, new RectangleF(0, 0, this.Width, this.Height - 5), sf);
                 }
             }
         }
 
-        private void Timer_Tick(object? sender, EventArgs e)
+        private void OnTimerTick(object sender, EventArgs e)
         {
-            if (!_isVisible)
-                return;
-
-            // Get performance data from the counters
-            float cpuUsage = _cpuCounter.NextValue();
-            float availableRamMB = _ramCounter.NextValue();
+            // Update the display text with live metrics
+            float cpuUsage = _cpuCounter != null ? _cpuCounter.NextValue() : 0;
+            float availableRamMB = _ramCounter != null ? _ramCounter.NextValue() : 0;
             
             // Get battery status
-            PowerStatus powerStatus = SystemInformation.PowerStatus;
+            _powerStatus = SystemInformation.PowerStatus;
+            int batteryLifePercent = (int)(_powerStatus.BatteryLifePercent * 100);
+            double remainingSeconds = _powerStatus.BatteryLifeRemaining;
             
-            int remainingSeconds = powerStatus.BatteryLifeRemaining;
-            string timeRemaining;
-            if (remainingSeconds == -1)
-            {
-                timeRemaining = "Calculating...";
-            }
-            else
+            string timeRemaining = "Not available";
+            if (remainingSeconds != -1)
             {
                 TimeSpan ts = TimeSpan.FromSeconds(remainingSeconds);
                 if (ts.TotalHours >= 1)
                 {
-                    timeRemaining = $"{(int)ts.TotalHours}h {ts.Minutes}m remaining";
+                    timeRemaining = $"{ts.TotalHours:0}h {ts.Minutes}m remaining";
                 }
                 else
                 {
@@ -288,25 +287,31 @@ namespace OverlayApp
             // Format the final display text with all metrics
             _displayText = $"Time Left: {timeRemaining}\n" +
                            $"CPU: {cpuUsage.ToString("F1")}%\n" +
-                           $"RAM: {availableRamMB.ToString("F0")} MB Free\n\n" +
-                           $"Developed by LostyDEV";
+                           $"RAM: {availableRamMB.ToString("F0")} MB Free";
             
             this.Invalidate();
         }
 
         public void ToggleVisibility()
         {
-            _isVisible = !_isVisible;
-            UpdateWindowPosition();
-            this.Invalidate();
+            IsVisible = !IsVisible;
+            if (IsVisible)
+            {
+                UpdateWindowPosition();
+                this.Show();
+            }
+            else
+            {
+                this.Hide();
+            }
             
             // Show or hide the close button when visibility is toggled
-            _closeButton.Visible = _isVisible;
+            _closeButton.Visible = IsVisible;
         }
 
         private void UpdateWindowPosition()
         {
-            const int flags = SWP_NOMOVE | SWP_NOSIZE;
+            const uint flags = SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW;
             SetWindowPos(this.Handle, HWND_TOPMOST, 0, 0, 0, 0, flags);
         }
 
