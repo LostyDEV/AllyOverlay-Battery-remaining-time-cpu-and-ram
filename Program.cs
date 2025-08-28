@@ -16,7 +16,6 @@ namespace OverlayApp
         [STAThread]
         static void Main()
         {
-            // Set the application to be DPI-aware for sharp text on high-resolution screens
             Application.SetHighDpiMode(HighDpiMode.SystemAware);
 
             Application.EnableVisualStyles();
@@ -88,7 +87,6 @@ namespace OverlayApp
 
     public class OverlayForm : Form
     {
-        // Import necessary Windows functions
         [DllImport("user32.dll")]
         private static extern bool SetWindowPos(IntPtr hWnd, int hWndInsertAfter, int X, int Y, int cx, int cy, uint uFlags);
         [DllImport("user32.dll")]
@@ -100,7 +98,6 @@ namespace OverlayApp
         [DllImport("user32.dll")]
         private static extern int SendMessage(IntPtr hWnd, int Msg, int wParam, int lParam);
 
-        // Constants for window management
         private const int SWP_NOSIZE = 0x0001;
         private const int SWP_NOMOVE = 0x0002;
         private const int HWND_TOPMOST = -1;
@@ -109,18 +106,18 @@ namespace OverlayApp
         private const uint VK_L = 0x4C;
         private const int HOTKEY_ID = 9000;
         
-        // Constants for dragging
         private const int WM_NCLBUTTONDOWN = 0xA1;
         private const int HT_CAPTION = 0x2;
 
         private System.Windows.Forms.Timer _timer;
+        private System.Windows.Forms.Timer _initialDisplayTimer;
         private string? _displayText;
         private bool _isVisible;
+        private bool _isInitialDisplay = true;
+        private const int InitialDisplayDuration = 10000;
         
-        // The custom close button
         private Button _closeButton;
 
-        // Performance counters for system metrics
         private PerformanceCounter _cpuCounter;
         private PerformanceCounter _ramCounter;
 
@@ -128,17 +125,15 @@ namespace OverlayApp
         {
             this.FormBorderStyle = FormBorderStyle.None;
             this.ShowInTaskbar = false;
-            this.TopMost = true; // This forces the window to stay on top
+            this.TopMost = true;
             this.WindowState = FormWindowState.Normal;
-            this.Size = new Size(300, 100); // Resized to fit the reduced information
+            this.Size = new Size(300, 100);
             
-            // Load the last saved position from the Registry
             LoadWindowPosition();
 
             this.BackColor = Color.Black;
             this.TransparencyKey = this.BackColor;
 
-            // Initialize and style the close button
             _closeButton = new Button();
             _closeButton.Text = "X";
             _closeButton.Font = new Font("Arial", 8, FontStyle.Bold);
@@ -149,30 +144,34 @@ namespace OverlayApp
             _closeButton.FlatAppearance.BorderSize = 0;
             _closeButton.Location = new Point(this.Width - _closeButton.Width - 5, 5);
             
-            // Add the click event handler to the button
             _closeButton.Click += (s, e) => this.Close();
 
-            // Add the button to the form's controls
             this.Controls.Add(_closeButton);
 
             _timer = new System.Windows.Forms.Timer()
             {
                 Interval = 1000,
-                Enabled = true,
+                Enabled = false,
             };
             _timer.Tick += Timer_Tick;
 
+            _initialDisplayTimer = new System.Windows.Forms.Timer()
+            {
+                Interval = InitialDisplayDuration,
+                Enabled = true,
+            };
+            _initialDisplayTimer.Tick += InitialDisplayTimer_Tick;
+
             _isVisible = true;
+            _displayText = "Developed by LostyDEV";
 
             RegisterHotKey(this.Handle, HOTKEY_ID, MOD_SHIFT, VK_L);
             this.FormClosing += (s, e) => 
             {
-                // Save the window position to the Registry when the form is closing
                 SaveWindowPosition();
                 UnregisterHotKey(this.Handle, HOTKEY_ID);
             };
 
-            // This event handler enables dragging the window
             this.MouseDown += (s, e) =>
             {
                 if (e.Button == MouseButtons.Left)
@@ -182,21 +181,25 @@ namespace OverlayApp
                 }
             };
 
-            // Initialize performance counters
             _cpuCounter = new PerformanceCounter("Processor", "% Processor Time", "_Total");
             _ramCounter = new PerformanceCounter("Memory", "Available MBytes");
         }
 
+        private void InitialDisplayTimer_Tick(object? sender, EventArgs e)
+        {
+            _isInitialDisplay = false;
+            _initialDisplayTimer.Stop();
+            _timer.Enabled = true;
+            Timer_Tick(null, EventArgs.Empty);
+        }
 
         private void LoadWindowPosition()
         {
             try
             {
-                // Open the specific Registry key for this application
                 RegistryKey? key = Registry.CurrentUser.OpenSubKey("SOFTWARE\\BatteryOverlay");
                 if (key != null)
                 {
-                    // Read the saved position values
                     this.Left = Convert.ToInt32(key.GetValue("XPosition", 20));
                     this.Top = Convert.ToInt32(key.GetValue("YPosition", 20));
                     key.Close();
@@ -204,7 +207,6 @@ namespace OverlayApp
             }
             catch (Exception)
             {
-                // If there is an error, just use the default position
                 this.Top = 20;
                 this.Left = 20;
             }
@@ -214,10 +216,8 @@ namespace OverlayApp
         {
             try
             {
-                // Create or open the specific Registry key for this application
                 RegistryKey? key = Registry.CurrentUser.CreateSubKey("SOFTWARE\\BatteryOverlay");
                 
-                // Write the current window position to the Registry
                 if (key != null)
                 {
                     key.SetValue("XPosition", this.Left);
@@ -227,7 +227,7 @@ namespace OverlayApp
             }
             catch (Exception)
             {
-                // Do nothing if saving fails, as it's not critical
+                // Do nothing
             }
         }
         
@@ -237,7 +237,6 @@ namespace OverlayApp
 
             if (_isVisible && _displayText != null)
             {
-                // Used a smaller font size to fix the DPI issues
                 using (Font font = new Font("Arial", 12, FontStyle.Bold))
                 using (Brush textBrush = new SolidBrush(Color.White))
                 {
@@ -245,32 +244,45 @@ namespace OverlayApp
                     format.LineAlignment = StringAlignment.Near;
                     format.Alignment = StringAlignment.Near;
 
-                    // Set up the layout
                     float x = 5;
                     float y = 5;
-
-                    e.Graphics.DrawString(_displayText, font, textBrush, x, y);
+                    
+                    if (_isInitialDisplay)
+                    {
+                        format.LineAlignment = StringAlignment.Center;
+                        format.Alignment = StringAlignment.Center;
+                        x = this.ClientSize.Width / 2;
+                        y = this.ClientSize.Height / 2;
+                    }
+                    
+                    e.Graphics.DrawString(_displayText, font, textBrush, x, y, format);
                 }
             }
         }
 
         private void Timer_Tick(object? sender, EventArgs e)
         {
-            if (!_isVisible)
+            if (!_isVisible || _isInitialDisplay)
                 return;
 
-            // Get performance data from the counters
             float cpuUsage = _cpuCounter.NextValue();
             float availableRamMB = _ramCounter.NextValue();
             
-            // Get battery status
             PowerStatus powerStatus = SystemInformation.PowerStatus;
             
             int remainingSeconds = powerStatus.BatteryLifeRemaining;
             string timeRemaining;
+            
             if (remainingSeconds == -1)
             {
-                timeRemaining = "Calculating...";
+                if (powerStatus.BatteryChargeStatus.HasFlag(BatteryChargeStatus.Charging))
+                {
+                    timeRemaining = "Charging";
+                }
+                else
+                {
+                    timeRemaining = "Estimating...";
+                }
             }
             else
             {
@@ -285,11 +297,9 @@ namespace OverlayApp
                 }
             }
             
-            // Format the final display text with all metrics
             _displayText = $"Time Left: {timeRemaining}\n" +
                            $"CPU: {cpuUsage.ToString("F1")}%\n" +
-                           $"RAM: {availableRamMB.ToString("F0")} MB Free\n\n" +
-                           $"Developed by LostyDEV";
+                           $"RAM: {availableRamMB.ToString("F0")} MB Free";
             
             this.Invalidate();
         }
@@ -300,7 +310,6 @@ namespace OverlayApp
             UpdateWindowPosition();
             this.Invalidate();
             
-            // Show or hide the close button when visibility is toggled
             _closeButton.Visible = _isVisible;
         }
 
