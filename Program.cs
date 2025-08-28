@@ -140,6 +140,7 @@ namespace OverlayApp
         private System.Windows.Forms.Timer _timer;
         private System.Windows.Forms.Timer _devTextTimer; // Timer for the temporary "LostyDEV" text
         private bool _showDevText = true; // Flag to control the "LostyDEV" text visibility
+
         private Button _closeButton;
 
         // System metrics
@@ -148,8 +149,7 @@ namespace OverlayApp
         private PerformanceCounter _ramCounter;
 
         public bool IsVisible { get; private set; } = true;
-        private const int REFRESH_INTERVAL = 1000; // Refresh interval in milliseconds
-
+        
         public OverlayForm()
         {
             this.FormBorderStyle = FormBorderStyle.None;
@@ -204,15 +204,15 @@ namespace OverlayApp
                 _ramCounter = null;
             }
 
-            // Set up the main timer for updates
+            // Set up the main timer for updates, all metrics will update every second
             _timer = new System.Windows.Forms.Timer();
-            _timer.Interval = REFRESH_INTERVAL;
+            _timer.Interval = 1000; // 1 second
             _timer.Tick += OnTimerTick;
             _timer.Start();
 
             // Set up a timer for the "LostyDEV" text
             _devTextTimer = new System.Windows.Forms.Timer();
-            _devTextTimer.Interval = 10000; // 10 seconds
+            _devTextTimer.Interval = 3000; // 3 seconds
             _devTextTimer.Tick += (sender, e) =>
             {
                 _showDevText = false;
