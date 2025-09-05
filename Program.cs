@@ -266,4 +266,130 @@ namespace OverlayApp
         [DllImport("user32.dll")]
         private static extern IntPtr SetWindowLong(IntPtr hWnd, int nIndex, IntPtr dwNewLong);
 
-        [DllImport("user32.
+        [DllImport("user32.dll")]
+        private static extern bool SetLayeredWindowAttributes(IntPtr hWnd, uint crKey, byte bAlpha, uint dwFlags);
+        
+        [DllImport("user32.dll")]
+        private static extern bool SetWindowPos(IntPtr hWnd, int hWndInsertAfter, int X, int Y, int cx, int cy, uint uFlags);
+        
+        [DllImport("user32.dll")]
+        public static extern bool RegisterHotKey(IntPtr hWnd, int id, int fsModifiers, int vk);
+        [DllImport("user32.dll")]
+        public static extern bool UnregisterHotKey(IntPtr hWnd, int id);
+        
+        public const int WM_HOTKEY = 0x0312;
+        public const int HOTKEY_ID = 9000;
+
+        private readonly System.Windows.Forms.Timer _timer;
+        private bool IsVisible = true;
+        private string _displayText = "";
+
+        private PerformanceCounter? _cpuCounter;
+        private PerformanceCounter? _ramCounter;
+        private PowerStatus _powerStatus = SystemInformation.PowerStatus;
+        
+        private readonly Button _closeButton;
+
+        public OverlayForm()
+        {
+            this.FormBorderStyle = FormBorderStyle.None;
+            this.Text = "";
+            this.ShowInTaskbar = false;
+            this.StartPosition = FormStartPosition.Manual;
+            this.Location = new Point(Screen.PrimaryScreen.WorkingArea.Width / 2 - this.Width / 2, 0);
+            this.Size = new Size(300, 200);
+            this.TopMost = true;
+
+            SetWindowLong(this.Handle, GWL_EXSTYLE, (IntPtr)((long)GetWindowLong(this.Handle, GWL_EXSTYLE) | WS_EX_TRANSPARENT | WS_EX_NOACTIVATE | WS_EX_TOOLWINDOW));
+            SetLayeredWindowAttributes(this.Handle, 0, 255, LWA_ALPHA);
+
+            RegisterHotKey(this.Handle, HOTKEY_ID, (int)(Keys.Control | Keys.Shift), (int)Keys.L);
+
+            _closeButton = new Button();
+            _closeButton.Text = "X";
+            _closeButton.ForeColor = Color.White;
+            _closeButton.BackColor = Color.Red;
+            _closeButton.FlatAppearance.BorderSize = 0;
+            _closeButton.FlatStyle = FlatStyle.Flat;
+            _closeButton.Font = new Font("Inter", 8, FontStyle.Bold);
+            _closeButton.Size = new Size(20, 20);
+            _closeButton.Location = new Point(this.Width - _closeButton.Width - 5, 5);
+            _closeButton.Click += CloseButton_Click;
+            _closeButton.Visible = false;
+            this.Controls.Add(_closeButton);
+
+            try
+            {
+                _cpuCounter = new PerformanceCounter("Processor", "% Processor Time", "_Total");
+                _ramCounter = new PerformanceCounter("Memory", "Available MBytes");
+            }
+            catch (Exception ex)
+            {
+                _displayText = $"Error initializing counters: {ex.Message}";
+                _cpuCounter = null;
+                _ramCounter = null;
+            }
+
+            _timer = new System.Windows.Forms.Timer();
+            _timer.Interval = 1000;
+            _timer.Tick += OnTimerTick;
+            _timer.Start();
+
+            OnTimerTick(null, null);
+        }
+
+        private void CloseButton_Click(object? sender, EventArgs e)
+        {
+            this.Close();
+        }
+
+        private void OnTimerTick(object? sender, EventArgs e)
+        {
+            float cpuUsage = _cpuCounter != null ? _cpuCounter.NextValue() : 0;
+            float availableRamMB = _ramCounter != null ? _ramCounter.NextValue() : 0;
+
+            _powerStatus = SystemInformation.PowerStatus;
+            double remainingSeconds = _powerStatus.BatteryLifeRemaining;
+            string timeRemaining = "N/A";
+
+            if (remainingSeconds != -1)
+            {
+                TimeSpan ts = TimeSpan.FromSeconds(remainingSeconds);
+                if (ts.TotalHours >= 1)
+                {
+                    timeRemaining = $"{ts.Hours:0}h {ts.Minutes}m remaining";
+                }
+                else
+                {
+                    timeRemaining = $"{ts.Minutes}m remaining";
+                }
+            }
+
+            bool masterVolumeMuted = AudioUtils.IsMasterVolumeMuted();
+            bool microphoneMuted = AudioUtils.IsMicrophoneMuted();
+
+            string volumeStatus = masterVolumeMuted ? "Muted" : "On";
+            string micStatus = microphoneMuted ? "Muted" : "On";
+
+            _displayText = $"Time Left: {timeRemaining}\n" +
+                           $"CPU: {cpuUsage.ToString("F1")}%\n" +
+                           $"RAM: {availableRamMB.ToString("F0")} MB Free\n" +
+                           $"Volume: {volumeStatus}\n" +
+                           $"Mic: {micStatus}";
+
+            this.Invalidate();
+        }
+
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            if (!IsVisible) return;
+
+            e.Graphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+            e.Graphics.TextRenderingHint = System.Drawing.Text.TextRenderingHint.AntiAlias;
+
+            using (SolidBrush backgroundBrush = new SolidBrush(Color.FromArgb(180, 0, 0, 0)))
+            {
+                e.Graphics.FillRectangle(backgroundBrush, new Rectangle(0, 0, this.Width, this.Height));
+            }
+
+            using (Font font = new
