@@ -238,7 +238,7 @@ namespace OverlayApp
             if (_isVisible && _displayText != null)
             {
                 using (Font font = new Font("Arial", 12, FontStyle.Bold))
-                using (Brush textBrush = new SolidBrush(Color.White))
+                using (Brush textBrush = new SolidBrush(Color.DarkRed))
                 {
                     StringFormat format = new StringFormat();
                     format.LineAlignment = StringAlignment.Near;
