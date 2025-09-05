@@ -6,7 +6,7 @@ using System.Windows.Forms;
 using Microsoft.Win32;
 using System.Diagnostics;
 using System.Collections.Generic;
-using System.Threading.Tasks;
+using System.Management;
 
 namespace OverlayApp
 {
@@ -64,7 +64,6 @@ namespace OverlayApp
                                 startY = cursorPos.Y;
                             }
                         }
-
                         if (isMouseDown)
                         {
                             Point currentPos = Cursor.Position;
@@ -96,45 +95,24 @@ namespace OverlayApp
     public class OverlayForm : Form
     {
         private const int GWL_EXSTYLE = -20;
-        private const int WS_EX_TOPMOST = 0x0008;
         private const int WS_EX_NOACTIVATE = 0x08000000;
         private const int WS_EX_TOOLWINDOW = 0x00000080;
         private const int WS_EX_TRANSPARENT = 0x00000020;
-        private const int WS_EX_LAYERED = 0x80000;
         private const int LWA_ALPHA = 0x2;
 
-        [DllImport("user32.dll", EntryPoint = "GetWindowLong")]
-        private static extern IntPtr GetWindowLong32(IntPtr hWnd, int nIndex);
+        // Use IntPtr for both 32-bit and 64-bit compatibility
+        [DllImport("user32.dll", SetLastError = true)]
+        private static extern IntPtr SetWindowLongPtr(IntPtr hWnd, int nIndex, IntPtr dwNewLong);
 
-        [DllImport("user32.dll", EntryPoint = "SetWindowLong")]
-        private static extern int SetWindowLong32(IntPtr hWnd, int nIndex, int dwNewLong);
-
-        [DllImport("user32.dll", EntryPoint = "GetWindowLongPtr")]
-        private static extern IntPtr GetWindowLong64(IntPtr hWnd, int nIndex);
-
-        [DllImport("user32.dll", EntryPoint = "SetWindowLongPtr")]
-        private static extern IntPtr SetWindowLong64(IntPtr hWnd, int nIndex, IntPtr dwNewLong);
-
-        private IntPtr GetWindowLong(IntPtr hWnd, int nIndex)
-        {
-            if (IntPtr.Size == 8) // 64-bit
-                return GetWindowLong64(hWnd, nIndex);
-            else // 32-bit
-                return GetWindowLong32(hWnd, nIndex);
-        }
-
-        private IntPtr SetWindowLong(IntPtr hWnd, int nIndex, IntPtr dwNewLong)
-        {
-            if (IntPtr.Size == 8) // 64-bit
-                return SetWindowLong64(hWnd, nIndex, dwNewLong);
-            else // 32-bit
-                return new IntPtr(SetWindowLong32(hWnd, nIndex, dwNewLong.ToInt32()));
-        }
-
+        [DllImport("user32.dll", SetLastError = true)]
+        private static extern IntPtr GetWindowLongPtr(IntPtr hWnd, int nIndex);
+        
         [DllImport("user32.dll")]
         private static extern bool SetLayeredWindowAttributes(IntPtr hWnd, uint crKey, byte bAlpha, uint dwFlags);
+        
         [DllImport("user32.dll")]
         private static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter, int X, int Y, int cx, int cy, uint uFlags);
+        
         private static readonly IntPtr HWND_TOPMOST = new IntPtr(-1);
         private const uint SWP_NOSIZE = 0x0001;
         private const uint SWP_NOMOVE = 0x0002;
@@ -148,17 +126,18 @@ namespace OverlayApp
         public const int HOTKEY_ID = 1;
 
         private string _displayText = "";
-        private System.Windows.Forms.Timer _timer;
-        private System.Windows.Forms.Timer _devTextTimer;
+        private System.Windows.Forms.Timer? _timer;
+        private System.Windows.Forms.Timer? _devTextTimer;
         private bool _showDevText = true;
-        private Button _closeButton;
+        private Button? _closeButton;
 
-        private PowerStatus _powerStatus;
-        private PerformanceCounter _cpuCounter;
-        private PerformanceCounter _ramCounter;
-        private PerformanceCounter[] _gpuMemoryCounters;
+        // Make fields nullable to resolve warnings
+        private PowerStatus? _powerStatus;
+        private PerformanceCounter? _cpuCounter;
+        private PerformanceCounter? _ramCounter;
+        private PerformanceCounter[]? _gpuMemoryCounters;
         private float _gpuTotalMB = 0;
-
+        
         public bool IsVisible { get; private set; } = true;
 
         public OverlayForm()
@@ -176,7 +155,9 @@ namespace OverlayApp
             this.BackColor = Color.Black;
             this.TransparencyKey = Color.Black;
 
-            SetWindowLong(this.Handle, GWL_EXSTYLE, (IntPtr)((long)GetWindowLong(this.Handle, GWL_EXSTYLE).ToInt64() | WS_EX_TRANSPARENT | WS_EX_NOACTIVATE | WS_EX_TOOLWINDOW));
+            // Use the correct 64-bit compatible P/Invoke functions directly
+            IntPtr currentStyle = GetWindowLongPtr(this.Handle, GWL_EXSTYLE);
+            SetWindowLongPtr(this.Handle, GWL_EXSTYLE, (IntPtr)((long)currentStyle.ToInt64() | WS_EX_TRANSPARENT | WS_EX_NOACTIVATE | WS_EX_TOOLWINDOW));
             SetLayeredWindowAttributes(this.Handle, 0, 255, LWA_ALPHA);
 
             _closeButton = new Button
@@ -265,7 +246,7 @@ namespace OverlayApp
             }
         }
 
-        private void OnTimerTick(object sender, EventArgs e)
+        private void OnTimerTick(object? sender, EventArgs e)
         {
             float cpuUsage = _cpuCounter?.NextValue() ?? 0;
             float availableRamMB = _ramCounter?.NextValue() ?? 0;
@@ -295,7 +276,7 @@ namespace OverlayApp
         {
             IsVisible = !IsVisible;
             if (IsVisible) this.Show(); else this.Hide();
-            _closeButton.Visible = IsVisible;
+            if (_closeButton != null) _closeButton.Visible = IsVisible;
         }
 
         protected override void WndProc(ref Message m)
