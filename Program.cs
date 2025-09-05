@@ -6,7 +6,7 @@ using System.Windows.Forms;
 using Microsoft.Win32;
 using System.Diagnostics;
 using System.Collections.Generic;
-using System.Management;
+using System.Threading.Tasks;
 
 namespace OverlayApp
 {
@@ -64,6 +64,7 @@ namespace OverlayApp
                                 startY = cursorPos.Y;
                             }
                         }
+
                         if (isMouseDown)
                         {
                             Point currentPos = Cursor.Position;
@@ -100,19 +101,19 @@ namespace OverlayApp
         private const int WS_EX_TRANSPARENT = 0x00000020;
         private const int LWA_ALPHA = 0x2;
 
-        // Use IntPtr for both 32-bit and 64-bit compatibility
+        // Use SetWindowLongPtr, which is the correct and compatible API for 64-bit systems.
+        // It's also supported on 32-bit systems as an alias for SetWindowLong.
         [DllImport("user32.dll", SetLastError = true)]
         private static extern IntPtr SetWindowLongPtr(IntPtr hWnd, int nIndex, IntPtr dwNewLong);
 
         [DllImport("user32.dll", SetLastError = true)]
         private static extern IntPtr GetWindowLongPtr(IntPtr hWnd, int nIndex);
-        
+
         [DllImport("user32.dll")]
         private static extern bool SetLayeredWindowAttributes(IntPtr hWnd, uint crKey, byte bAlpha, uint dwFlags);
-        
+
         [DllImport("user32.dll")]
         private static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter, int X, int Y, int cx, int cy, uint uFlags);
-        
         private static readonly IntPtr HWND_TOPMOST = new IntPtr(-1);
         private const uint SWP_NOSIZE = 0x0001;
         private const uint SWP_NOMOVE = 0x0002;
@@ -136,8 +137,7 @@ namespace OverlayApp
         private PerformanceCounter? _cpuCounter;
         private PerformanceCounter? _ramCounter;
         private PerformanceCounter[]? _gpuMemoryCounters;
-        private float _gpuTotalMB = 0;
-        
+
         public bool IsVisible { get; private set; } = true;
 
         public OverlayForm()
@@ -219,7 +219,7 @@ namespace OverlayApp
             _devTextTimer.Tick += (s, e) =>
             {
                 _showDevText = false;
-                _devTextTimer.Stop();
+                _devTextTimer?.Stop(); // Use null-conditional operator
                 this.Invalidate();
             };
             _devTextTimer.Start();
