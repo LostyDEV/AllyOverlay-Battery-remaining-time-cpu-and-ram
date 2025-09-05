@@ -92,7 +92,6 @@ namespace OverlayApp
 
     public class OverlayForm : Form
     {
-        // Corrected P/Invoke declarations for 64-bit compatibility
         private const int GWL_EXSTYLE = -20;
         private const int WS_EX_TOPMOST = 0x0008;
         private const int WS_EX_NOACTIVATE = 0x08000000;
@@ -130,7 +129,6 @@ namespace OverlayApp
         private bool _showDevText = true;
         private Button _closeButton;
 
-        // Make fields nullable to address warnings
         private PowerStatus? _powerStatus;
         private PerformanceCounter? _cpuCounter;
         private PerformanceCounter? _ramCounter;
@@ -154,7 +152,6 @@ namespace OverlayApp
             this.BackColor = Color.Black;
             this.TransparencyKey = Color.Black;
 
-            // Corrected SetWindowLongPtr call for 64-bit compatibility
             IntPtr currentStyle = GetWindowLongPtr(this.Handle, GWL_EXSTYLE);
             SetWindowLongPtr(this.Handle, GWL_EXSTYLE, (IntPtr)((long)currentStyle | WS_EX_TRANSPARENT | WS_EX_NOACTIVATE | WS_EX_TOOLWINDOW));
             SetLayeredWindowAttributes(this.Handle, 0, 255, LWA_ALPHA);
@@ -180,7 +177,6 @@ namespace OverlayApp
                 _cpuCounter = new PerformanceCounter("Processor", "% Processor Time", "_Total");
                 _ramCounter = new PerformanceCounter("Memory", "Available MBytes");
                 
-                // Initialize the PerformanceCounter for GPU memory.
                 _gpuMemoryCounter = new PerformanceCounter("GPU Engine", "Dedicated Usage", "pid_0_luid_0x00000000_0x0000F5AC_eng_3D");
             }
             catch (Exception ex)
@@ -243,7 +239,6 @@ namespace OverlayApp
             float cpuUsage = _cpuCounter != null ? _cpuCounter.NextValue() : 0;
             float availableRamMB = _ramCounter != null ? _ramCounter.NextValue() : 0;
             
-            // Handle possible null reference
             _powerStatus = SystemInformation.PowerStatus;
             int batteryLifePercent = (int)(_powerStatus.BatteryLifePercent * 100);
             double remainingSeconds = _powerStatus.BatteryLifeRemaining;
@@ -262,14 +257,12 @@ namespace OverlayApp
                 }
             }
 
-            // Get GPU memory usage
             float gpuMemoryUsage = 0;
             if (_gpuMemoryCounter != null)
             {
                 gpuMemoryUsage = _gpuMemoryCounter.NextValue();
             }
 
-            // Format the final display text with all metrics
             _displayText = $"Time Left: {timeRemaining}\n" +
                            $"CPU: {cpuUsage.ToString("F1")}%\n" +
                            $"RAM: {availableRamMB.ToString("F0")} MB Free\n" +
