@@ -392,4 +392,61 @@ namespace OverlayApp
                 e.Graphics.FillRectangle(backgroundBrush, new Rectangle(0, 0, this.Width, this.Height));
             }
 
-            using (Font font = new
+            using (Font font = new Font("Inter", 12, FontStyle.Bold))
+            using (SolidBrush textBrush = new SolidBrush(Color.Red))
+            {
+                StringFormat sf = new StringFormat();
+                sf.Alignment = StringAlignment.Near;
+                sf.LineAlignment = StringAlignment.Near;
+                e.Graphics.DrawString(_displayText, font, textBrush, new RectangleF(10, 10, this.Width - 20, this.Height - 20), sf);
+            }
+        }
+
+        public void ToggleVisibility()
+        {
+            IsVisible = !IsVisible;
+            if (IsVisible)
+            {
+                UpdateWindowPosition();
+                this.Show();
+            }
+            else
+            {
+                this.Hide();
+            }
+
+            _closeButton.Visible = IsVisible;
+            this.Invalidate();
+        }
+
+        private void UpdateWindowPosition()
+        {
+            const uint flags = SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW;
+            SetWindowPos(this.Handle, HWND_TOPMOST_INT, 0, 0, 0, 0, flags);
+        }
+
+        protected override void WndProc(ref Message m)
+        {
+            base.WndProc(ref m);
+
+            if (m.Msg == WM_HOTKEY && (int)m.WParam == HOTKEY_ID)
+            {
+                ToggleVisibility();
+            }
+        }
+
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing)
+            {
+                UnregisterHotKey(this.Handle, HOTKEY_ID);
+                _timer.Stop();
+                _timer.Dispose();
+                _cpuCounter?.Dispose();
+                _ramCounter?.Dispose();
+                _closeButton.Dispose();
+            }
+            base.Dispose(disposing);
+        }
+    }
+}
