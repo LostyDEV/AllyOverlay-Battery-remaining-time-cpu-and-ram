@@ -101,8 +101,6 @@ namespace OverlayApp
         private const int WS_EX_TRANSPARENT = 0x00000020;
         private const int LWA_ALPHA = 0x2;
 
-        // Use SetWindowLongPtr, which is the correct and compatible API for 64-bit systems.
-        // It's also supported on 32-bit systems as an alias for SetWindowLong.
         [DllImport("user32.dll", SetLastError = true)]
         private static extern IntPtr SetWindowLongPtr(IntPtr hWnd, int nIndex, IntPtr dwNewLong);
 
@@ -132,7 +130,6 @@ namespace OverlayApp
         private bool _showDevText = true;
         private Button? _closeButton;
 
-        // Make fields nullable to resolve warnings
         private PowerStatus? _powerStatus;
         private PerformanceCounter? _cpuCounter;
         private PerformanceCounter? _ramCounter;
@@ -155,7 +152,6 @@ namespace OverlayApp
             this.BackColor = Color.Black;
             this.TransparencyKey = Color.Black;
 
-            // Use the correct 64-bit compatible P/Invoke functions directly
             IntPtr currentStyle = GetWindowLongPtr(this.Handle, GWL_EXSTYLE);
             SetWindowLongPtr(this.Handle, GWL_EXSTYLE, (IntPtr)((long)currentStyle.ToInt64() | WS_EX_TRANSPARENT | WS_EX_NOACTIVATE | WS_EX_TOOLWINDOW));
             SetLayeredWindowAttributes(this.Handle, 0, 255, LWA_ALPHA);
@@ -219,7 +215,7 @@ namespace OverlayApp
             _devTextTimer.Tick += (s, e) =>
             {
                 _showDevText = false;
-                _devTextTimer?.Stop(); // Use null-conditional operator
+                _devTextTimer?.Stop();
                 this.Invalidate();
             };
             _devTextTimer.Start();
