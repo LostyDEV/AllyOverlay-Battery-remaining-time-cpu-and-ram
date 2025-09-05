@@ -29,10 +29,10 @@ jobs:
         run: dotnet restore
 
       - name: Publish (single-file exe)
+        shell: pwsh
         run: |
           $runtime = "win-${{ matrix.arch }}"
-          dotnet publish OverlayApp.csproj -c Release -r $runtime --self-contained true `
-            /p:PublishSingleFile=true /p:IncludeNativeLibrariesForSelfExtract=true
+          dotnet publish OverlayApp.csproj -c Release -r $runtime --self-contained true /p:PublishSingleFile=true /p:IncludeNativeLibrariesForSelfExtract=true
 
       - name: List files to debug paths
         shell: pwsh
@@ -41,9 +41,9 @@ jobs:
           $publishPath = "bin/Release/net8.0-windows/win-${arch}/publish"
           Write-Host "Listing files in $publishPath..."
           if (Test-Path $publishPath) {
-            Get-ChildItem -Path $publishPath
+            Get-ChildItem -Path $publishPath -Recurse
           } else {
-            Write-Host "Publish directory not found. The previous step may have failed."
+            Write-Host "Publish directory not found."
             exit 1
           }
 
@@ -53,10 +53,12 @@ jobs:
           $arch = "${{ matrix.arch }}"
           $publishPath = "bin/Release/net8.0-windows/win-${arch}/publish"
           $exePath = "$publishPath/OverlayApp.exe"
+          $newExeName = "OverlayApp-win-${arch}.exe"
           if (Test-Path $exePath) {
-            Rename-Item -Path $exePath -NewName "$publishPath/OverlayApp-win-${arch}.exe"
+            Rename-Item -Path $exePath -NewName $newExeName
+            Write-Host "Renamed $exePath to $publishPath/$newExeName"
           } else {
-            Write-Host "Executable not found at $exePath. Aborting rename."
+            Write-Host "Executable not found at $exePath"
             exit 1
           }
 
@@ -66,7 +68,13 @@ jobs:
           $arch = "${{ matrix.arch }}"
           $publishPath = "bin/Release/net8.0-windows/win-${arch}/publish"
           $zipName = "OverlayApp-win-${arch}.zip"
-          Compress-Archive -Path "$publishPath/*" -DestinationPath $zipName -Force
+          if (Test-Path $publishPath) {
+            Compress-Archive -Path "$publishPath/*" -DestinationPath $zipName -Force
+            Write-Host "Created $zipName"
+          } else {
+            Write-Host "Publish path not found: $publishPath"
+            exit 1
+          }
 
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
@@ -84,6 +92,11 @@ jobs:
     steps:
       - name: Download all artifacts
         uses: actions/download-artifact@v4
+
+      - name: List downloaded artifacts
+        run: |
+          echo "Downloaded artifacts:"
+          find . -type f -name "*.exe" -o -name "*.zip" | sort
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
