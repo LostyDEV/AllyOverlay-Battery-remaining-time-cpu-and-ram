@@ -273,4 +273,39 @@ namespace OverlayApp
             _displayText = $"Time Left: {timeRemaining}\n" +
                            $"CPU: {cpuUsage.ToString("F1")}%\n" +
                            $"RAM: {availableRamMB.ToString("F0")} MB Free\n" +
-                           $"GPU VRAM:
+                           $"GPU VRAM: {gpuMemoryUsage:F0} MB";
+
+            this.Invalidate();
+        }
+
+        public void ToggleVisibility()
+        {
+            IsVisible = !IsVisible;
+            if (IsVisible)
+            {
+                UpdateWindowPosition();
+                this.Show();
+            }
+            else
+            {
+                this.Hide();
+            }
+            _closeButton.Visible = IsVisible;
+        }
+
+        private void UpdateWindowPosition()
+        {
+            const uint flags = SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW;
+            SetWindowPos(this.Handle, HWND_TOPMOST, 0, 0, 0, 0, flags);
+        }
+
+        protected override void WndProc(ref Message m)
+        {
+            base.WndProc(ref m);
+            if (m.Msg == WM_HOTKEY && (int)m.WParam == HOTKEY_ID)
+            {
+                ToggleVisibility();
+            }
+        }
+    }
+}
