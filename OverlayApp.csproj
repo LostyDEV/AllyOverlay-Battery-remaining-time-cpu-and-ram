@@ -8,9 +8,9 @@
     <PublishSingleFile>true</PublishSingleFile>
     <SelfContained>true</SelfContained>
     <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
-    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
     <AssemblyName>OverlayApp</AssemblyName>
     <RootNamespace>OverlayApp</RootNamespace>
+    <!-- Remove hardcoded RuntimeIdentifier to allow dynamic builds -->
   </PropertyGroup>
   <ItemGroup>
     <FrameworkReference Include="Microsoft.WindowsDesktop.App.WindowsForms" />
