@@ -5,8 +5,7 @@ using System.Threading;
 using System.Windows.Forms;
 using Microsoft.Win32;
 using System.Diagnostics;
-using System.Threading.Tasks; // Added for Task.Delay
-using System.Management; // Added for WMI
+using System.Threading.Tasks;
 
 namespace OverlayApp
 {
@@ -60,11 +59,12 @@ namespace OverlayApp
                         if (!isMouseDown)
                         {
                             isMouseDown = true;
-                            startY = Cursor.Position.Y;
+                            startY = Cursor.Position.Y; // Store initial Y position when mouse is pressed
                         }
                         else
                         {
                             int currentY = Cursor.Position.Y;
+                            // Check if the mouse was pressed near the top and dragged down sufficiently
                             if (startY < TopScreenTolerance && currentY - startY > DragThreshold)
                             {
                                 _form.ToggleVisibility();
@@ -73,7 +73,7 @@ namespace OverlayApp
                     }
                     else
                     {
-                        isMouseDown = false;
+                        isMouseDown = false; // Reset when mouse button is released
                     }
 
                     Thread.Sleep(50); // Prevents high CPU usage
@@ -87,31 +87,48 @@ namespace OverlayApp
 
     public partial class OverlayForm : Form
     {
-        // ... (rest of the class) ...
+        // P/Invoke declarations for window management
+        private const int GWL_EXSTYLE = -20;
+        private const int WS_EX_TRANSPARENT = 0x00000020;
+        private const int WS_EX_NOACTIVATE = 0x08000000;
+        private const int WS_EX_TOOLWINDOW = 0x00000080;
+        private const int WS_EX_LAYERED = 0x80000;
+        private const int LWA_ALPHA = 0x2;
+
+        [DllImport("user32.dll")]
+        private static extern IntPtr GetWindowLong(IntPtr hWnd, int nIndex);
+
+        [DllImport("user32.dll")]
+        private static extern IntPtr SetWindowLong(IntPtr hWnd, int nIndex, IntPtr dwNewLong); // Corrected to IntPtr
+
+        [DllImport("user32.dll")]
+        private static extern bool SetLayeredWindowAttributes(IntPtr hWnd, uint crKey, byte bAlpha, uint dwFlags);
+
+        // Corrected signature for SetWindowPos: hWndInsertAfter expects an int
+        [DllImport("user32.dll")]
+        private static extern bool SetWindowPos(IntPtr hWnd, int hWndInsertAfter, int X, int Y, int cx, int cy, uint uFlags);
+
+
+        // Hotkey constants
+        [DllImport("user32.dll")]
+        public static extern bool RegisterHotKey(IntPtr hWnd, int id, uint fsModifiers, uint vk);
+        [DllImport("user32.dll")]
+        public static extern bool UnregisterHotKey(IntPtr hWnd, int id);
+        public const int WM_HOTKEY = 0x0312;
+        public const int HOTKEY_ID = 9000; // Unique ID for the hotkey
+
+        // Window position constants
+        private const int HWND_TOPMOST_INT = -1; // Use an int for the SetWindowPos parameter
+
         private readonly System.Windows.Forms.Timer _timer;
-        private readonly Stopwatch _stopwatch = new Stopwatch();
         private bool IsVisible = true;
         private string _displayText = "";
 
-        // WMI related
-        private PerformanceCounter _cpuCounter = new PerformanceCounter("Processor", "% Processor Time", "_Total");
-        private readonly DateTime _startTime = DateTime.Now;
+        // System metrics
+        private PerformanceCounter? _cpuCounter; // Make it nullable
+        private PerformanceCounter? _ramCounter; // Make it nullable
 
         private readonly Button _closeButton;
-
-        // Constants for window placement
-        private const int HWND_TOPMOST = -1;
-        private const uint SWP_NOMOVE = 0x0002;
-        private const uint SWP_NOSIZE = 0x0001;
-        private const uint SWP_SHOWWINDOW = 0x0040;
-        private const int WM_HOTKEY = 0x0312;
-        private const int HOTKEY_ID = 9000;
-
-        [DllImport("user32.dll")]
-        private static extern bool RegisterHotKey(IntPtr hWnd, int id, uint fsModifiers, uint vk);
-
-        [DllImport("user32.dll")]
-        private static extern bool SetWindowPos(IntPtr hWnd, int hWndInsertAfter, int X, int Y, int cx, int cy, uint uFlags);
 
         public OverlayForm()
         {
@@ -119,44 +136,57 @@ namespace OverlayApp
             this.Text = "";
             this.ShowInTaskbar = false;
             this.StartPosition = FormStartPosition.Manual;
-            this.Location = new Point(0, 0);
-            this.Size = new Size(Screen.PrimaryScreen.WorkingArea.Width, Screen.PrimaryScreen.WorkingArea.Height);
+            // Set initial position to top-center of the screen
+            this.Location = new Point(Screen.PrimaryScreen.WorkingArea.Width / 2 - this.Width / 2, 0);
+            this.Size = new Size(300, 150); // Example size, adjust as needed
             this.TopMost = true;
 
-            // Set the background color to be transparent
-            this.BackColor = Color.LimeGreen;
-            this.TransparencyKey = this.BackColor;
+            // Make the window click-through and non-focusable
+            // Use IntPtr for dwNewLong in SetWindowLong
+            SetWindowLong(this.Handle, GWL_EXSTYLE, (IntPtr)((long)GetWindowLong(this.Handle, GWL_EXSTYLE) | WS_EX_TRANSPARENT | WS_EX_NOACTIVATE | WS_EX_TOOLWINDOW));
+            SetLayeredWindowAttributes(this.Handle, 0, 255, LWA_ALPHA); // Fully opaque initially
 
-            // Register the hotkey (e.g., Ctrl+Alt+F1) to toggle visibility
-            const uint MOD_CONTROL = 0x0002;
-            const uint MOD_ALT = 0x0001;
-            const int VK_F1 = 0x70;
-            RegisterHotKey(this.Handle, HOTKEY_ID, MOD_CONTROL | MOD_ALT, VK_F1);
+            // Register the hotkey (e.g., Ctrl + Shift + L) to toggle visibility
+            // Example: Ctrl + Shift + L (VK_L is 0x4C)
+            RegisterHotKey(this.Handle, HOTKEY_ID, (uint)Keys.Control | (uint)Keys.Shift, (uint)Keys.L);
 
-            // Close button
-            _closeButton = new Button
-            {
-                Text = "X",
-                ForeColor = Color.White,
-                BackColor = Color.Red,
-                FlatStyle = FlatStyle.Flat,
-                Font = new Font("Arial", 10, FontStyle.Bold),
-                Size = new Size(20, 20),
-                Location = new Point(this.ClientSize.Width - 25, 5),
-                Visible = IsVisible // Initially visible
-            };
+            // Set up the close button
+            _closeButton = new Button();
+            _closeButton.Text = "X";
+            _closeButton.ForeColor = Color.White;
+            _closeButton.BackColor = Color.DarkRed; // Rich red
             _closeButton.FlatAppearance.BorderSize = 0;
+            _closeButton.FlatStyle = FlatStyle.Flat;
+            _closeButton.Font = new Font("Inter", 8, FontStyle.Bold); // Consistent font
+            _closeButton.Size = new Size(20, 20);
+            _closeButton.Location = new Point(this.Width - _closeButton.Width - 5, 5);
             _closeButton.Click += CloseButton_Click;
+            _closeButton.Visible = false; // Hidden by default until toggled
             this.Controls.Add(_closeButton);
 
-            // Start a timer to update stats
+            // Initialize system performance counters
+            try
+            {
+                _cpuCounter = new PerformanceCounter("Processor", "% Processor Time", "_Total");
+                _ramCounter = new PerformanceCounter("Memory", "Available MBytes");
+                // Removed GPU counter as per your request
+            }
+            catch (Exception ex)
+            {
+                // Handle exceptions if performance counters are not accessible
+                _displayText = $"Error initializing counters: {ex.Message}";
+                _cpuCounter = null;
+                _ramCounter = null;
+            }
+
+            // Set up the main timer for updates
             _timer = new System.Windows.Forms.Timer();
-            _timer.Interval = 1000; // Update every 1 second
-            _timer.Tick += (sender, e) => UpdateStats();
+            _timer.Interval = 1000; // 1 second
+            _timer.Tick += OnTimerTick;
             _timer.Start();
 
-            // Initial update
-            UpdateStats();
+            // Initial update to set the text immediately
+            OnTimerTick(null, null);
         }
 
         private void CloseButton_Click(object? sender, EventArgs e)
@@ -164,66 +194,61 @@ namespace OverlayApp
             this.Close();
         }
 
-        private double GetCpuTemperature()
+        private void OnTimerTick(object? sender, EventArgs e)
         {
-            double temperature = 0;
-            try
-            {
-                // Query the WMI class for thermal zone temperature
-                ManagementObjectSearcher searcher = new ManagementObjectSearcher(@"root\WMI", "SELECT * FROM MSAcpi_ThermalZoneTemperature");
-                foreach (ManagementObject obj in searcher.Get())
-                {
-                    // The value is in Kelvin * 10, so convert it to Celsius
-                    temperature = (Convert.ToDouble(obj["CurrentTemperature"].ToString()) - 2732) / 10.0;
-                    break; // We only need the first reading
-                }
-            }
-            catch (Exception ex)
-            {
-                // Handle any errors that may occur
-                Console.WriteLine($"Error getting CPU temperature: {ex.Message}");
-            }
-            return temperature;
-        }
+            // Update display text with live metrics
+            float cpuUsage = _cpuCounter != null ? _cpuCounter.NextValue() : 0;
+            float availableRamMB = _ramCounter != null ? _ramCounter.NextValue() : 0;
 
-        private void UpdateStats()
-        {
-            // Calculate elapsed time
-            TimeSpan elapsedTime = DateTime.Now - _startTime;
-            string timeRemaining = "";
-            TimeSpan totalTime = TimeSpan.FromMinutes(45);
-            TimeSpan ts = totalTime - elapsedTime;
+            // Get battery status
+            PowerStatus powerStatus = SystemInformation.PowerStatus;
+            double remainingSeconds = powerStatus.BatteryLifeRemaining;
+            string timeRemaining = "N/A";
 
-            // Get CPU and RAM usage
-            float cpuUsage = _cpuCounter.NextValue();
-            long availableRamMB = new Microsoft.VisualBasic.Devices.ComputerInfo().AvailablePhysicalMemory / (1024 * 1024);
-            
-            // Check if there is time left on the timer
-            if (ts.TotalSeconds > 0)
+            if (remainingSeconds != -1) // -1 indicates battery is not present or information is unavailable
             {
+                TimeSpan ts = TimeSpan.FromSeconds(remainingSeconds);
                 if (ts.TotalHours >= 1)
                 {
-                    timeRemaining = $"{ts.TotalHours:0}h {ts.Minutes}m remaining";
+                    timeRemaining = $"{ts.Hours:0}h {ts.Minutes}m remaining";
                 }
                 else
                 {
                     timeRemaining = $"{ts.Minutes}m remaining";
                 }
             }
-            else
-            {
-                timeRemaining = "Timer finished";
-            }
-            
-            double cpuTemp = GetCpuTemperature();
 
             // Format the final display text with all metrics
+            // Changed color to Red for "rich red" as requested previously
             _displayText = $"Time Left: {timeRemaining}\n" +
                            $"CPU: {cpuUsage.ToString("F1")}%\n" +
-                           $"CPU Temp: {cpuTemp.ToString("F1")} °C\n" +
                            $"RAM: {availableRamMB.ToString("F0")} MB Free";
-            
-            this.Invalidate();
+
+            this.Invalidate(); // Request a redraw of the form
+        }
+
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            if (!IsVisible) return;
+
+            e.Graphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+            e.Graphics.TextRenderingHint = System.Drawing.Text.TextRenderingHint.AntiAlias;
+
+            // Draw a semi-transparent background for the overlay
+            using (SolidBrush backgroundBrush = new SolidBrush(Color.FromArgb(180, 0, 0, 0))) // Slightly transparent black
+            {
+                e.Graphics.FillRectangle(backgroundBrush, new Rectangle(0, 0, this.Width, this.Height));
+            }
+
+            // Draw the metrics text with a rich red color
+            using (Font font = new Font("Inter", 12, FontStyle.Bold))
+            using (SolidBrush textBrush = new SolidBrush(Color.Red)) // Changed to Rich Red
+            {
+                StringFormat sf = new StringFormat();
+                sf.Alignment = StringAlignment.Near;
+                sf.LineAlignment = StringAlignment.Near;
+                e.Graphics.DrawString(_displayText, font, textBrush, new RectangleF(10, 10, this.Width - 20, this.Height - 20), sf);
+            }
         }
 
         public void ToggleVisibility()
@@ -231,32 +256,51 @@ namespace OverlayApp
             IsVisible = !IsVisible;
             if (IsVisible)
             {
-                UpdateWindowPosition();
+                UpdateWindowPosition(); // Ensure it's on top when shown
                 this.Show();
             }
             else
             {
                 this.Hide();
             }
-            
+
             // Show or hide the close button when visibility is toggled
             _closeButton.Visible = IsVisible;
+            this.Invalidate(); // Redraw to update visibility of elements
         }
 
         private void UpdateWindowPosition()
         {
+            // Use the corrected HWND_TOPMOST_INT which is an int
             const uint flags = SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW;
-            SetWindowPos(this.Handle, HWND_TOPMOST, 0, 0, 0, 0, flags);
+            SetWindowPos(this.Handle, HWND_TOPMOST_INT, 0, 0, 0, 0, flags);
         }
 
         protected override void WndProc(ref Message m)
         {
             base.WndProc(ref m);
 
+            // Check if the message is a hotkey press
             if (m.Msg == WM_HOTKEY && (int)m.WParam == HOTKEY_ID)
             {
                 ToggleVisibility();
             }
+        }
+
+        // Clean up resources when the form is closing
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing)
+            {
+                // Unregister the hotkey
+                UnregisterHotKey(this.Handle, HOTKEY_ID);
+                _timer.Stop();
+                _timer.Dispose();
+                _cpuCounter?.Dispose();
+                _ramCounter?.Dispose();
+                _closeButton.Dispose();
+            }
+            base.Dispose(disposing);
         }
     }
 }
