@@ -3,11 +3,11 @@ name: Build & Release Battery Overlay
 on:
   push:
     tags:
-      - "v*" # e.g., v1.0.0
-  workflow_dispatch: # Manual run from button
+      - "v*"
+  workflow_dispatch:
 
 permissions:
-  contents: write # Required for Release
+  contents: write
 
 jobs:
   build:
@@ -26,18 +26,18 @@ jobs:
         run: dotnet restore
 
       - name: Publish (single-file exe)
-        run: dotnet publish OverlayApp.csproj -c Release /p:PublishSingleFile=true /p:IncludeNativeLibrariesForSelfExtract=true
+        run: dotnet publish OverlayApp.csproj -c Release -r win-x64 --self-contained true /p:PublishSingleFile=true /p:IncludeNativeLibrariesForSelfExtract=true
 
       - name: Create zip
         shell: pwsh
         run: |
-          Compress-Archive -Path "bin/Release/net8.0-windows/publish/*" -DestinationPath "OverlayApp.zip" -Force
+          Compress-Archive -Path "bin/Release/net8.0-windows/win-x64/publish/*" -DestinationPath "OverlayApp.zip" -Force
 
       - name: Create GitHub Release (attach exe + zip)
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            bin/Release/net8.0-windows/publish/OverlayApp.exe
+            bin/Release/net8.0-windows/win-x64/publish/OverlayApp.exe
             OverlayApp.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
