@@ -92,8 +92,10 @@ namespace OverlayApp
                     // Sleep for a short duration to prevent high CPU usage
                     Thread.Sleep(10);
                 }
-            });
-            thread.IsBackground = true;
+            })
+            {
+                IsBackground = true
+            };
             thread.Start();
         }
     }
@@ -113,7 +115,7 @@ namespace OverlayApp
         private static extern IntPtr GetWindowLong(IntPtr hWnd, int nIndex);
 
         [DllImport("user32.dll")]
-        private static extern IntPtr SetWindowLong(IntPtr hWnd, int nIndex, int dwNewLong);
+        private static extern IntPtr SetWindowLong(IntPtr hWnd, int nIndex, IntPtr dwNewLong);
 
         [DllImport("user32.dll")]
         private static extern bool SetLayeredWindowAttributes(IntPtr hWnd, uint crKey, byte bAlpha, uint dwFlags);
@@ -143,10 +145,10 @@ namespace OverlayApp
 
         private Button _closeButton;
 
-        // System metrics
-        private PowerStatus _powerStatus;
-        private PerformanceCounter _cpuCounter;
-        private PerformanceCounter _ramCounter;
+        // System metrics - made nullable to fix warnings
+        private PowerStatus? _powerStatus;
+        private PerformanceCounter? _cpuCounter;
+        private PerformanceCounter? _ramCounter;
 
         public bool IsVisible { get; private set; } = true;
         
@@ -158,7 +160,7 @@ namespace OverlayApp
             this.StartPosition = FormStartPosition.Manual;
 
             // Set up initial position to be in the center of the screen at the top
-            int screenWidth = Screen.PrimaryScreen.WorkingArea.Width;
+            int screenWidth = Screen.PrimaryScreen?.WorkingArea.Width ?? 1920;
             int x = (screenWidth - this.Width) / 2;
             int y = 0; // Position at the top
             this.Location = new Point(x, y);
@@ -168,22 +170,26 @@ namespace OverlayApp
             this.BackColor = Color.Black;
             this.TransparencyKey = Color.Black;
 
-            // Make the window click-through and non-focusable
-            SetWindowLong(this.Handle, GWL_EXSTYLE, (IntPtr)((long)GetWindowLong(this.Handle, GWL_EXSTYLE) | WS_EX_TRANSPARENT | WS_EX_NOACTIVATE | WS_EX_TOOLWINDOW));
+            // Make the window click-through and non-focusable - FIXED: Cast to IntPtr
+            var currentStyle = (long)GetWindowLong(this.Handle, GWL_EXSTYLE);
+            var newStyle = currentStyle | WS_EX_TRANSPARENT | WS_EX_NOACTIVATE | WS_EX_TOOLWINDOW;
+            SetWindowLong(this.Handle, GWL_EXSTYLE, new IntPtr(newStyle));
             SetLayeredWindowAttributes(this.Handle, 0, 255, LWA_ALPHA);
 
             // Set up the close button
-            _closeButton = new Button();
-            _closeButton.Text = "X";
-            _closeButton.ForeColor = Color.White;
-            _closeButton.BackColor = Color.DarkRed;
+            _closeButton = new Button
+            {
+                Text = "X",
+                ForeColor = Color.White,
+                BackColor = Color.DarkRed,
+                FlatStyle = FlatStyle.Flat,
+                Font = new Font("Segoe UI", 8, FontStyle.Bold),
+                Size = new Size(20, 20),
+                Location = new Point(this.Width - 25, 5),
+                Visible = false
+            };
             _closeButton.FlatAppearance.BorderSize = 0;
-            _closeButton.FlatStyle = FlatStyle.Flat;
-            _closeButton.Font = new Font("Segoe UI", 8, FontStyle.Bold);
-            _closeButton.Size = new Size(20, 20);
-            _closeButton.Location = new Point(this.Width - _closeButton.Width - 5, 5);
             _closeButton.Click += (sender, e) => { this.Close(); };
-            _closeButton.Visible = false;
             this.Controls.Add(_closeButton);
 
             // Register the hotkey Shift + L
@@ -205,14 +211,18 @@ namespace OverlayApp
             }
 
             // Set up the main timer for updates, all metrics will update every second
-            _timer = new System.Windows.Forms.Timer();
-            _timer.Interval = 1000; // 1 second
-            _timer.Tick += OnTimerTick;
+            _timer = new System.Windows.Forms.Timer
+            {
+                Interval = 1000 // 1 second
+            };
+            _timer.Tick += OnTimerTick!; // ! to suppress nullable warning
             _timer.Start();
 
             // Set up a timer for the "LostyDEV" text
-            _devTextTimer = new System.Windows.Forms.Timer();
-            _devTextTimer.Interval = 3000; // 3 seconds
+            _devTextTimer = new System.Windows.Forms.Timer
+            {
+                Interval = 3000 // 3 seconds
+            };
             _devTextTimer.Tick += (sender, e) =>
             {
                 _showDevText = false;
@@ -239,9 +249,11 @@ namespace OverlayApp
             using (Font font = new Font("Inter", 12, FontStyle.Bold))
             using (SolidBrush textBrush = new SolidBrush(Color.White))
             {
-                StringFormat sf = new StringFormat();
-                sf.Alignment = StringAlignment.Near;
-                sf.LineAlignment = StringAlignment.Near;
+                StringFormat sf = new StringFormat
+                {
+                    Alignment = StringAlignment.Near,
+                    LineAlignment = StringAlignment.Near
+                };
                 e.Graphics.DrawString(_displayText, font, textBrush, new RectangleF(10, 10, this.Width - 20, this.Height - 20), sf);
             }
 
@@ -251,19 +263,21 @@ namespace OverlayApp
                 using (Font font = new Font("Inter", 10, FontStyle.Italic))
                 using (SolidBrush devTextBrush = new SolidBrush(Color.FromArgb(150, 255, 255, 255)))
                 {
-                    StringFormat sf = new StringFormat();
-                    sf.Alignment = StringAlignment.Center;
-                    sf.LineAlignment = StringAlignment.Far;
+                    StringFormat sf = new StringFormat
+                    {
+                        Alignment = StringAlignment.Center,
+                        LineAlignment = StringAlignment.Far
+                    };
                     e.Graphics.DrawString("Developed by LostyDEV", font, devTextBrush, new RectangleF(0, 0, this.Width, this.Height - 5), sf);
                 }
             }
         }
 
-        private void OnTimerTick(object sender, EventArgs e)
+        private void OnTimerTick(object? sender, EventArgs e)
         {
             // Update the display text with live metrics
-            float cpuUsage = _cpuCounter != null ? _cpuCounter.NextValue() : 0;
-            float availableRamMB = _ramCounter != null ? _ramCounter.NextValue() : 0;
+            float cpuUsage = _cpuCounter?.NextValue() ?? 0;
+            float availableRamMB = _ramCounter?.NextValue() ?? 0;
             
             // Get battery status
             _powerStatus = SystemInformation.PowerStatus;
@@ -286,8 +300,8 @@ namespace OverlayApp
             
             // Format the final display text with all metrics
             _displayText = $"Time Left: {timeRemaining}\n" +
-                           $"CPU: {cpuUsage.ToString("F1")}%\n" +
-                           $"RAM: {availableRamMB.ToString("F0")} MB Free";
+                           $"CPU: {cpuUsage:F1}%\n" +
+                           $"RAM: {availableRamMB:F0} MB Free";
             
             this.Invalidate();
         }
@@ -323,6 +337,24 @@ namespace OverlayApp
             {
                 ToggleVisibility();
             }
+        }
+
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing)
+            {
+                // Unregister hotkey
+                UnregisterHotKey(this.Handle, HOTKEY_ID);
+                
+                // Dispose performance counters
+                _cpuCounter?.Dispose();
+                _ramCounter?.Dispose();
+                
+                // Dispose timers
+                _timer?.Dispose();
+                _devTextTimer?.Dispose();
+            }
+            base.Dispose(disposing);
         }
     }
 }
