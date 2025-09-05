@@ -297,15 +297,20 @@ namespace OverlayApp
 
         // Window position constants
         private const int HWND_TOPMOST_INT = -1; // Use an int for the SetWindowPos parameter
+        // ADDED back the missing constants
+        private const uint SWP_NOMOVE = 0x0002;
+        private const uint SWP_NOSIZE = 0x0001;
+        private const uint SWP_SHOWWINDOW = 0x0040;
+
 
         private readonly System.Windows.Forms.Timer _timer;
         private bool IsVisible = true;
         private string _displayText = "";
 
         // System metrics
-        private PerformanceCounter? _cpuCounter; // Make it nullable
-        private PerformanceCounter? _ramCounter; // Make it nullable
-        private PowerStatus _powerStatus = SystemInformation.PowerStatus; // Initialize _powerStatus
+        private PerformanceCounter? _cpuCounter; // Made nullable
+        private PerformanceCounter? _ramCounter; // Made nullable
+        private PowerStatus _powerStatus = SystemInformation.PowerStatus; // Initialized _powerStatus
 
         private readonly Button _closeButton;
 
